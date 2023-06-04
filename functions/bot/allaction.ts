@@ -3,6 +3,7 @@ const unban = require('./adactions/unban')
 import dban from './adactions/dban'
 const kick = require('./adactions/kick')
 const del = require('./adactions/del')
+const delgp = require('./adactions/delgp')
 const dels = require('./adactions/dels')
 const restrict = require('./adactions/restrict')
 const purge = require('./adactions/purge')
@@ -76,6 +77,12 @@ let allaction = async (bot: any) => {
         bot.command('dls', async (ctx: any, next: any) => {
         if (ctx.state.adm)
           await dels(bot, ctx)
+        // next(ctx: any)
+      })
+
+       bot.command('dlgp', async (ctx: any, next: any) => {
+        if (ctx.state.adm)
+          await delgp(bot, ctx)
         // next(ctx: any)
       })
 

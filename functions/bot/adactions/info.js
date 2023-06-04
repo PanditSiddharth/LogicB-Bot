@@ -25,11 +25,11 @@ const info = async (bot, ctx) => {
             await unmt(bot, ctx, userId, name)
         }
         
-        else if (ctxx.message.entities && ctxx.message.text.search(/[0-9]/) != -1 && ctxx.message.text.length < 16) {
-            const t = ctxx.message.entities[0]
-            const userId = ctxx.message.text.substring(t.length + 1)
+        else if (ctx.message.entities && ctx.message.text.search(/[0-9]/) != -1 && ctxx.message.text.length < 16) {
+            const t = ctx.message.entities[0]
+            const userId = ctx.message.text.substring(t.length + 1)
             const name = userId
-            await unmt(bot, ctxx, userId, name)
+            await unmt(bot, ctx, userId, name)
         }
 
         /* ************************************************************************************** */

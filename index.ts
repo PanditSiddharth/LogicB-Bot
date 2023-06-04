@@ -2,18 +2,25 @@
 import keep_alive from "./keep_alive"
 const { Telegraf, Composer } = require("telegraf");
 
-const bot = new Telegraf(process.env.TOKEN)
+const bot = new Telegraf(process.env.TOKEN, { handlerTimeout: 5000 * 1000 })
 import strt from './functions/bot/start'
 const { message } = require('telegraf/filters');
 const rateLimit = require('telegraf-ratelimit')
 keep_alive()
 bot.use(rateLimit({
   window: 1000, // 1 second
-  limit: 100, // limit each IP to 5 requests per windowMs
+  limit: 10, // limit each IP to 5 requests per windowMs
   onLimitExceeded: (ctx: any, next: any) => {
-      return ctx.reply('Too many requests, please try again later.');
+      // // return ctx.reply('Too many requests, please try again later.');
   },
 }));
+
+bot.on('channel_post', (ctx: any)=> {
+  ctx.reply('hi');
+  // console.log(ctx.update)
+  // ctx.deleteMessage()
+  
+})
 
 
 try {

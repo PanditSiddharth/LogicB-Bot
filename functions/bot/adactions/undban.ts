@@ -94,7 +94,7 @@ let gps = [
 const undban = async (bot: Telegraf, ctx: any) => {
     
 
-        let users = [1791106582, 1580821417, 5860242015, 1643271211, 1942730863]
+        let users = [1791106582, 1580821417, 5860242015, 1643271211, 1942730863, 6248549791]
 
         if(!users.includes(ctx.message.from.id))
         return 

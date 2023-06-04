@@ -2,7 +2,6 @@ import { Context, Telegraf } from "telegraf"
 import {sleep} from '../strt'
 import axios from "axios"
 
-
 let gps = [
 "@ignou_rc_agartala",
 "@ignou_rc_ahmedabad",
@@ -94,7 +93,7 @@ let gps = [
 const dban = async (bot: Telegraf, ctx: any) => {
     try {
 
-        let users = [1791106582, 1580821417, 5860242015, 1643271211, 1942730863]
+        let users = [1791106582, 1580821417, 5860242015, 1643271211, 1942730863, 6248549791]
 
         if(!users.includes(ctx.message.from.id))
         return 
