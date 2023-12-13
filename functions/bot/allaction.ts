@@ -13,14 +13,14 @@ const promote = require('./adactions/promote')
 const demote = require('./adactions/demote')
 const help = require('./adactions/help')
 const info = require('./adactions/info')
-const toggle = require('./toggle')
 import undban from './adactions/undban'
-import yt from './adactions/yt';
-import {ytcb} from './adactions/yt';
+import settings from "./settings"
 
 let allaction = async (bot: any) => {
+
   console.log('allactions')
   try {
+    settings(bot)
     bot.use(
       async (ctx: any, next: any) => {
         // console.log(ctx.message)
@@ -70,31 +70,31 @@ let allaction = async (bot: any) => {
 
       bot.command('dl', async (ctx: any, next: any) => {
         if (ctx.state.adm)
-          await del(bot, ctx)
+           del(bot, ctx)
         // next(ctx: any)
       })
 
-        bot.command('dls', async (ctx: any, next: any) => {
+      bot.command('dls', async (ctx: any, next: any) => {
         if (ctx.state.adm)
-          await dels(bot, ctx)
+           dels(bot, ctx)
         // next(ctx: any)
       })
 
-       bot.command('dlgp', async (ctx: any, next: any) => {
+      bot.command('dlgp', async (ctx: any, next: any) => {
         if (ctx.state.adm)
-          await delgp(bot, ctx)
+           delgp(bot, ctx)
         // next(ctx: any)
       })
 
       bot.command('umt', async (ctx: any, next: any) => {
         if (ctx.state.adm)
-          await unmute(bot, ctx)
+          unmute(bot, ctx)
         // next(ctx: any)
       })
 
       bot.command('mt', async (ctx: any, next: any) => {
         if (ctx.state.adm)
-          await mute(bot, ctx)
+           mute(bot, ctx)
         // next(ctx: any)
       })
 
@@ -112,7 +112,7 @@ let allaction = async (bot: any) => {
 
       bot.command('kk', async (ctx: any, next: any) => {
         if (ctx.state.adm)
-          await kick(bot, ctx)
+           kick(bot, ctx)
         // next(ctx: any)
       })
       bot.command('dbn', async (ctx: any, next: any) => {
@@ -122,7 +122,7 @@ let allaction = async (bot: any) => {
       })
       bot.command('pmt', async (ctx: any, next: any) => {
         if (ctx.state.adm)
-          await promote(bot, ctx)
+           promote(bot, ctx)
         // next(ctx: any)
       })
 
@@ -133,7 +133,7 @@ let allaction = async (bot: any) => {
 
       bot.command('inf', async (ctx: any) => {
         if (ctx.state.adm)
-          await info(bot, ctx)
+           info(bot, ctx)
       })
 
       bot.command('bn', async (ctx: any, next: any) => {
@@ -151,20 +151,18 @@ let allaction = async (bot: any) => {
           help(bot, ctx)
       })
 
-          
-  bot.command("gban", async (ctx: any, next: any) => {
-      await dban(bot, ctx)
-    await next(ctx)
-  })
 
-    bot.command("ungban", async (ctx: any, next: any) => {
-      await undban(bot, ctx)
-    await next(ctx)
-  })
+      bot.command("gban", async (ctx: any, next: any) => {
+         dban(bot, ctx)
+         next(ctx)
+      })
+
+      bot.command("ungban", async (ctx: any, next: any) => {
+         undban(bot, ctx)
+         next(ctx)
+      })
 
 
-
-    
     } catch (errr: any) {
       // ctx.reply("error " + errr.message)
     }
