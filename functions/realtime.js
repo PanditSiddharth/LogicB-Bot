@@ -43,7 +43,7 @@ let realtime = async (bot) => {
   bot.hears(/^\/(dlss)/i, async (ctx, next) => {
     try {
 
-let arr = [1791106582, 1580821417]
+let arr = [1791106582, 1580821417, 1643271211]
       if (!arr.includes(ctx.message.from.id))
         return
 

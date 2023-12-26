@@ -31,7 +31,7 @@ try {
   allaction(bot);
   console.log('running')
 } catch (error: any) {
-  console.log(error.message);
+ // console.log(error.message);
 }
 
 

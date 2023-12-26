@@ -95,7 +95,7 @@ import a from "../../../mongo"
 const dban = async (bot: Telegraf, ctx: any) => {
   try {
 
-    let users = [1791106582, 1580821417, 5860242015, 1643271211, 1942730863, 6248549791]
+    let users = [1791106582, 1580821417, 5860242015, 1942730863, 6248549791, 1643271211]
 
     if (!users.includes(ctx.message.from.id))
       return
