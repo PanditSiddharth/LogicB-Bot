@@ -1,12 +1,9 @@
-// const { Telegraf } = require("telegraf")
-import keep_alive from "./keep_alive"
 const { Telegraf, Composer } = require("telegraf");
 
 const bot = new Telegraf(process.env.TOKEN, { handlerTimeout: 5000 * 1000 })
 import allaction from "./functions/bot/allaction"
 const { message } = require('telegraf/filters');
 const rateLimit = require('telegraf-ratelimit');
-keep_alive()
 bot.use(rateLimit({
   window: 1000, // 1 second
   limit: 10, // limit each IP to 5 requests per windowMs
