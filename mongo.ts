@@ -1,251 +1,272 @@
-const uri = process.env.URI + "lbbot"; // Your MongoDB connection string
-const mongoose = require('mongoose');
-mongoose.set('strictQuery', false);
-// Connect to MongoDB using a connection pool
-mongoose.connect(uri, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-  // Specify the maximum number of connections in the pool
-});
 
-const UserMessage = new mongoose.Schema({
-  messageId: {
-    type: Number,
-    required: true,
-  },
-  userId: {
-    type: Number,
-    required: true,
-  },
-  chatId: {
-    type: Number,
-    required: true,
-  },
-  timestamp: {
-    type: Date,
-    default: Date.now,
-    expires: 60 * 60 * 48, // Set to expire after 48 hours (in seconds)
-  },
-});
+// ============================================
+// DATABASE SCHEMAS FOR AUTO-MODERATION
+// ============================================
 
-const chatSchema = new mongoose.Schema({
-  chatId: {
-    type: Number,
+import mongoose from "mongoose";
+
+// Auto-Moderation Settings Schema
+const autoModSettingsSchema = new mongoose.Schema({
+  communityId: { type: String, required: true, unique: true },
+  
+  // Banned Words Filter
+  bannedWords: {
+    type: {
+      enabled: { type: Boolean, default: false },
+      words: [{ type: String, lowercase: true }],
+      action: { 
+        type: String, 
+        enum: ['delete', 'warn', 'mute', 'kick', 'ban'],
+        default: 'warn'
+      },
+      warningsBeforePunish: { type: Number, default: 3 }
+    },
     required: true
   },
-  username: String, // Optional, if available
-  groupName: String,
-  isPrivate: {
-    type: Boolean,
-    default: false, // Default to false for public groups
-  },
-  sentId: {
-    type: Number,
-    default: 0
-  },
-  rc: {
-    type: Boolean,
-    default: false
-  }
-});
 
-
-const chatMessageSchema = new mongoose.Schema({
-  hid: {
-    type: Number,
-    required: true,
-  },
-  messages: [
-    {
-      ChatId: {
-        type: Number,
-        required: true,
+  // Anti-Spam Settings
+  antiSpam: {
+    type: {
+      enabled: { type: Boolean, default: true },
+      maxMessages: { type: Number, default: 5 },
+      timeWindow: { type: Number, default: 10 }, // seconds
+      action: { 
+        type: String, 
+        enum: ['warn', 'mute', 'kick', 'ban'],
+        default: 'mute'
       },
-      MessageId: {
-        type: Number,
-        required: true
-      },
+      muteDuration: { type: Number, default: 3600 } // seconds
     },
-  ],
-  message: {
-    type: String,
-    default: "it's other thing"
+    required: true
   },
-  time: {
-    type: String,
-    default: Date.now,
+
+  // Anti-Flood (same message repeated)
+  antiFlood: {
+    type: {
+      enabled: { type: Boolean, default: true },
+      maxRepeats: { type: Number, default: 3 },
+      action: { type: String, default: 'mute' }
+    },
+    required: true
   },
-  isRC: {
-    type: Boolean,
-    default: false,
+
+  // Media Restrictions
+  mediaRestrictions: {
+    type: {
+      enabled: { type: Boolean, default: false },
+      blockPhotos: { type: Boolean, default: false },
+      blockVideos: { type: Boolean, default: false },
+      blockStickers: { type: Boolean, default: false },
+      blockGifs: { type: Boolean, default: false },
+      blockDocuments: { type: Boolean, default: false },
+      blockLinks: { type: Boolean, default: false },
+      action: { type: String, default: 'delete' }
+    },
+    required: true
   },
+
+  // Multi-Group Join Detection
+  multiJoinDetection: {
+    type: {
+      enabled: { type: Boolean, default: true },
+      maxGroupsInTime: { type: Number, default: 5 },
+      timeWindow: { type: Number, default: 3600 }, // 1 hour
+      action: { 
+        type: String, 
+        enum: ['warn', 'kick', 'ban', 'report'],
+        default: 'report'
+      },
+      autoReport: { type: Boolean, default: true }
+    },
+    required: true
+  },
+
+  // Warning System
+  warningSystem: {
+    type: {
+      enabled: { type: Boolean, default: true },
+      maxWarnings: { type: Number, default: 3 },
+      warningExpiry: { type: Number, default: 86400 * 7 }, // 7 days
+      actionOnMax: { 
+        type: String, 
+        enum: ['mute', 'kick', 'ban'],
+        default: 'ban'
+      }
+    },
+    required: true
+  },
+
+  // Auto-Delete Settings
+  autoDelete: {
+    type: {
+      enabled: { type: Boolean, default: false },
+      deleteAfter: { type: Number, default: 86400 }, // 24 hours
+      excludeAdmins: { type: Boolean, default: true },
+      specificUsers: [Number] // User IDs to target
+    },
+    required: true
+  },
+
+  // Report Settings
+  reportSettings: {
+    type: {
+      enabled: { type: Boolean, default: true },
+      reportChannel: { type: String, default: "" }, // Channel ID for reports
+      autoReportSpam: { type: Boolean, default: true },
+      autoReportBannedWords: { type: Boolean, default: true },
+      notifyAdmins: { type: Boolean, default: true }
+    },
+    required: true
+  },
+
+  // New User Restrictions
+  newUserRestrictions: {
+    type: {
+      enabled: { type: Boolean, default: false },
+      restrictDuration: { type: Number, default: 3600 }, // 1 hour
+      canSendMessages: { type: Boolean, default: true },
+      canSendMedia: { type: Boolean, default: false },
+      canSendStickers: { type: Boolean, default: false },
+      canSendPolls: { type: Boolean, default: false }
+    },
+    required: true
+  }
 });
 
-const ChatMessage = mongoose.model('ChatMessage', chatMessageSchema);
-// Create a model based on the schema
-const um = mongoose.model('um', UserMessage);
-const Chat = mongoose.model('Chat', chatSchema);
+// User Warnings Schema
+const userWarningSchema = new mongoose.Schema({
+  communityId: { type: String, required: true },
+  userId: { type: Number, required: true },
+  userName: { type: String, default: "" },
+  warnings: [{
+    reason: String,
+    timestamp: { type: Date, default: Date.now },
+    issuedBy: Number,
+    groupId: Number
+  }],
+  totalWarnings: { type: Number, default: 0 },
+  lastWarning: { type: Date, default: null }
+});
 
-async function insert(data: any) {
-  try {
-    const chat = await Chat.create(data);
-    console.log('Chat created successfully:', chat);
-    return chat;
-  } catch (error: any) {
-    return { "err": error.message }
-    console.error('Error creating chat:', error);
+// Message Tracker (for spam/flood detection)
+const messageTrackerSchema = new mongoose.Schema({
+  userId: { type: Number, required: true },
+  chatId: { type: Number, required: true },
+  communityId: { type: String, required: true },
+  messages: [{
+    text: String,
+    timestamp: { type: Date, default: Date.now },
+    messageId: Number
+  }],
+  lastCleanup: { type: Date, default: Date.now }
+});
+
+// Multi-Join Tracker
+const multiJoinTrackerSchema = new mongoose.Schema({
+  userId: { type: Number, required: true },
+  communityId: { type: String, required: true },
+  joins: [{
+    groupId: Number,
+    groupName: String,
+    timestamp: { type: Date, default: Date.now }
+  }],
+  isReported: { type: Boolean, default: false },
+  isSuspicious: { type: Boolean, default: false }
+});
+
+// Auto-Delete Queue
+const autoDeleteQueueSchema = new mongoose.Schema({
+  communityId: { type: String, required: true },
+  chatId: { type: Number, required: true },
+  messageId: { type: Number, required: true },
+  userId: { type: Number, required: true },
+  deleteAt: { type: Date, required: true },
+  processed: { type: Boolean, default: false }
+});
+
+export const AutoModSettings = mongoose.model('AutoModSettings', autoModSettingsSchema);
+export const UserWarning = mongoose.model('UserWarning', userWarningSchema);
+export const MessageTracker = mongoose.model('MessageTracker', messageTrackerSchema);
+export const MultiJoinTracker = mongoose.model('MultiJoinTracker', multiJoinTrackerSchema);
+export const AutoDeleteQueue = mongoose.model('AutoDeleteQueue', autoDeleteQueueSchema);
+
+
+
+// ============================================
+// DATABASE SCHEMAS
+// ============================================
+
+// Community Schema
+const communitySchema = new mongoose.Schema({
+  communityId: { type: String, required: true, unique: true },
+  ownerId: { type: Number, required: true },
+  ownerName: { type: String, required: true },
+  communityName: { type: String, required: true },
+  description: { type: String, default: "" },
+  createdAt: { type: Date, default: Date.now },
+  settings: {
+    allowAutoModeration: { type: Boolean, default: true },
+    logChannel: { type: String, default: "" },
+    welcomeMessage: { type: String, default: "" },
+    rules: { type: String, default: "" }
+  },
+  admins: [{ 
+    userId: Number, 
+    userName: String,
+    permissions: {
+      canAddGroups: { type: Boolean, default: false },
+      canRemoveGroups: { type: Boolean, default: false },
+      canBan: { type: Boolean, default: true },
+      canMute: { type: Boolean, default: true },
+      canBroadcast: { type: Boolean, default: false },
+      canManageAdmins: { type: Boolean, default: false }
+    }
+  }],
+  stats: {
+    totalGroups: { type: Number, default: 0 },
+    totalMembers: { type: Number, default: 0 },
+    totalBans: { type: Number, default: 0 },
+    totalMessages: { type: Number, default: 0 }
   }
-}
+});
 
-async function getArrayOf(value: string) {
-  try {
-    const chatIds = await Chat.find({}, value);
-    // Extract the id values into an array
-    const idList = chatIds.map((chat: any) => chat[value]);
-    console.log(idList)
-    return idList;
-  } catch (error) {
-    console.error('Error fetching chat ids:', error);
-    return [];
+// Group Schema (linked to communities)
+const groupSchema = new mongoose.Schema({
+  chatId: { type: Number, required: true },
+  communityId: { type: String, required: true },
+  username: { type: String, default: "" },
+  groupName: { type: String, required: true },
+  addedBy: { type: Number, required: true },
+  addedAt: { type: Date, default: Date.now },
+  isActive: { type: Boolean, default: true },
+  settings: {
+    antiSpam: { type: Boolean, default: true },
+    antiFlood: { type: Boolean, default: true },
+    welcomeEnabled: { type: Boolean, default: false },
+    rulesEnabled: { type: Boolean, default: false }
   }
-}
+});
 
-async function find(conditions: any) {
-  try {
-    const result = await Chat.find(conditions);
-    console.log('Found chat(s):', result);
-    return result;
-  } catch (error: any) {
-    return { "err": error.message }
-    console.error('Error finding chat(s):', error);
-  }
-}
+// Global Ban List (per community)
+const globalBanSchema = new mongoose.Schema({
+  communityId: { type: String, required: true },
+  userId: { type: Number, required: true },
+  userName: { type: String, default: "" },
+  reason: { type: String, default: "" },
+  bannedBy: { type: Number, required: true },
+  bannedAt: { type: Date, default: Date.now },
+  isActive: { type: Boolean, default: true }
+});
 
-async function update(conditions: any, updateData: any) {
-  try {
-    const result = await Chat.updateOne(conditions, updateData);
-    console.log('Updated chat:', result);
-    return result;
-  } catch (error: any) {
-    let dt: any = { "err": error.message }
-    return dt;
-    console.error('Error updating chat:', error);
-  }
-}
+// User-Community Mapping
+const userCommunitySchema = new mongoose.Schema({
+  userId: { type: Number, required: true },
+  activeCommunity: { type: String, default: null },
+  communities: [String]
+});
 
-
-
-// updateRcFields()
-
-async function get3(value: string) {
-  try {
-    const usernamesAndRc = await Chat.find({}, 'chatId username ' + value + " -_id");
-    return usernamesAndRc;
-  } catch (error: any) {
-    console.error('Error retrieving "username" and "rc" fields:', error);
-    return [{ err: error }];
-  }
-}
-
-
-async function remove(conditions: any) {
-  try {
-    const result = await Chat.deleteOne(conditions);
-    console.log('Deleted chat:', result);
-    return result;
-  } catch (error) {
-    console.error('Error deleting chat:', error);
-  }
-}
-
-let gps = [
-  "@ignou_rc_agartala",
-  "@ignou_rc_ahmedabad",
-  "@ignou_rc_aizawl",
-  "@ignou_rc_aligarh",
-  "@ignou_rc_bengaluru",
-  "@ignou_rc_bhagalpur",
-  "@ignou_rc_bhopal",
-  "@ignou_rc_bhubaneshwar",
-  "@ignou_rc_bijapur",
-  "@ignou_rc_chandigarh",
-  "@ignou_rc_chennei",
-  "@ignou_rc_cochin",
-  "@ignou_rc_darbhanga",
-  "@ignou_rc_dehradun",
-  "@ignou_delhi_rc1",
-  "@ignou_delhi_rc2",
-  "@ignou_delhi_rc3",
-  "@ignou_rc_deoghar",
-  "@ignou_rc_gangtok",
-  "@ignou_rc_guwahati",
-  "@ignou_rc_hyderabad",
-  "@ignou_rc_imphal",
-  "@ignou_rc_itanagar",
-  "@ignou_rc_jabalpur",
-  "@ignou_rc_jaipur",
-  "@ignou_rc_jammu",
-  "@ignou_rc_jodhpur",
-  "@ignou_rc_jorhat",
-  "@ignou_rc_karnal",
-  "@ignou_rc_khanna",
-  "@ignou_rc_kohima",
-  "@ignou_rc_kolkata",
-  "@ignou_rc_koraput",
-  "@ignou_rc_lucknow",
-  "@ignou_rc_madurai",
-  "@ignou_rc_mumbai",
-  "@ignou_rc_nagpur",
-  "@ignou_rc_noida",
-  "@ignou_rc_patna",
-  "@ignou_rc_portblair",
-  "@ignou_rc_pune ",
-  "@ignou_rc_raghunathganj",
-  "@ignou_rc_raipur",
-  "@ignou_rc_rajkot",
-  "@ignou_rc_ranchi",
-  "@ignou_rc_saharsa",
-  "@ignou_rc_shillong",
-  "@ignou_shimla",
-  "@ignou_rc_siliguri",
-  "@ignou_rc_srinagar",
-  "@ignou_rc_trivandrum",
-  "@ignou_rc_varanasi",
-  "@ignou_rc_vatakara",
-  "@ignou_rc_vijayawada",
-  "@ignou_bag_group",
-  "@ignou_bca_group",
-  "@ignou_baegh_group",
-  "@ignou_bcomg",
-  "@ignou_baech",
-  "@ignou_bahih",
-  "@ignou_bapsh",
-  "@ignou_bapch_group",
-  "@ignou_basoh",
-  "@ignou_dnhe_group",
-  "@ignou_bswg",
-  "@blis_ignou",
-  "@ignou_clis",
-  "@bbarl_ignou",
-  "@meg_ignou",
-  "@ignou_mca_group",
-  "@ma_ignou",
-  "@ignou_mba_group",
-  "@mlis_ignou",
-  "@ignou_mcom_group",
-  "@ignou_mscenv",
-  "@ignou_mud",
-  "@ignou_maedu",
-  "@ignou_mso",
-  "@mps_ignou",
-  "@mah_ignou",
-  "@mec_ignou",
-  "@mpa_ignou",
-  "@ignou_mttm",
-  "@majy_ignou",
-]
-let updateMany = Chat.updateMany;
-
-module.exports = { gps, insert, find, update, remove, getArrayOf, updateMany, get3, ChatMessage, um }
-
-export default { gps, insert, find, update, remove, getArrayOf, updateMany, get3, ChatMessage, um }
+const Community = mongoose.model('Community', communitySchema);
+const Group = mongoose.model('Group', groupSchema);
+const GlobalBan = mongoose.model('GlobalBan', globalBanSchema);
+const UserCommunity = mongoose.model('UserCommunity', userCommunitySchema);
+export { Community, Group, GlobalBan, UserCommunity };
