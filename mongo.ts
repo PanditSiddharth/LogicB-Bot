@@ -8,14 +8,14 @@ import mongoose from "mongoose";
 // Auto-Moderation Settings Schema
 const autoModSettingsSchema = new mongoose.Schema({
   communityId: { type: String, required: true, unique: true },
-  
+
   // Banned Words Filter
   bannedWords: {
     type: {
       enabled: { type: Boolean, default: false },
       words: [{ type: String, lowercase: true }],
-      action: { 
-        type: String, 
+      action: {
+        type: String,
         enum: ['delete', 'warn', 'mute', 'kick', 'ban'],
         default: 'warn'
       },
@@ -30,8 +30,8 @@ const autoModSettingsSchema = new mongoose.Schema({
       enabled: { type: Boolean, default: true },
       maxMessages: { type: Number, default: 5 },
       timeWindow: { type: Number, default: 10 }, // seconds
-      action: { 
-        type: String, 
+      action: {
+        type: String,
         enum: ['warn', 'mute', 'kick', 'ban'],
         default: 'mute'
       },
@@ -71,8 +71,8 @@ const autoModSettingsSchema = new mongoose.Schema({
       enabled: { type: Boolean, default: true },
       maxGroupsInTime: { type: Number, default: 5 },
       timeWindow: { type: Number, default: 3600 }, // 1 hour
-      action: { 
-        type: String, 
+      action: {
+        type: String,
         enum: ['warn', 'kick', 'ban', 'report'],
         default: 'report'
       },
@@ -87,8 +87,8 @@ const autoModSettingsSchema = new mongoose.Schema({
       enabled: { type: Boolean, default: true },
       maxWarnings: { type: Number, default: 3 },
       warningExpiry: { type: Number, default: 86400 * 7 }, // 7 days
-      actionOnMax: { 
-        type: String, 
+      actionOnMax: {
+        type: String,
         enum: ['mute', 'kick', 'ban'],
         default: 'ban'
       }
@@ -184,7 +184,85 @@ const autoDeleteQueueSchema = new mongoose.Schema({
   processed: { type: Boolean, default: false }
 });
 
-export const AutoModSettings = mongoose.model('AutoModSettings', autoModSettingsSchema);
+
+const defaultSettings = {
+  bannedWords: {
+    enabled: false,
+    words: [],
+    action: 'warn',
+    warningsBeforePunish: 3
+  },
+  antiSpam: {
+    enabled: true,
+    maxMessages: 5,
+    timeWindow: 10,
+    action: 'mute',
+    muteDuration: 3600
+  },
+  antiFlood: {
+    enabled: true,
+    maxRepeats: 3,
+    action: 'mute'
+  },
+  mediaRestrictions: {
+    enabled: false,
+    blockPhotos: false,
+    blockVideos: false,
+    blockStickers: false,
+    blockGifs: false,
+    blockDocuments: false,
+    blockLinks: false,
+    action: 'delete'
+  },
+  multiJoinDetection: {
+    enabled: true,
+    maxGroupsInTime: 5,
+    timeWindow: 3600,
+    action: 'report',
+    autoReport: true
+  },
+  warningSystem: {
+    enabled: true,
+    maxWarnings: 3,
+    warningExpiry: 86400 * 7,
+    actionOnMax: 'ban'
+  },
+  autoDelete: {
+    enabled: false,
+    deleteAfter: 86400,
+    excludeAdmins: true,
+    specificUsers: []
+  },
+  reportSettings: {
+    enabled: true,
+    reportChannel: "",
+    autoReportSpam: true,
+    autoReportBannedWords: true,
+    notifyAdmins: true
+  },
+  newUserRestrictions: {
+    enabled: false,
+    restrictDuration: 3600,
+    canSendMessages: true,
+    canSendMedia: false,
+    canSendStickers: false,
+    canSendPolls: false
+  }
+};
+
+const AutoModSettings = mongoose.model('AutoModSettings', autoModSettingsSchema);
+
+AutoModSettings.schema.path('bannedWords').default(() => defaultSettings.bannedWords);
+AutoModSettings.schema.path('antiSpam').default(() => defaultSettings.antiSpam);
+AutoModSettings.schema.path('antiFlood').default(() => defaultSettings.antiFlood);
+AutoModSettings.schema.path('mediaRestrictions').default(() => defaultSettings.mediaRestrictions);
+AutoModSettings.schema.path('multiJoinDetection').default(() => defaultSettings.multiJoinDetection);
+AutoModSettings.schema.path('warningSystem').default(() => defaultSettings.warningSystem);
+AutoModSettings.schema.path('autoDelete').default(() => defaultSettings.autoDelete);
+AutoModSettings.schema.path('reportSettings').default(() => defaultSettings.reportSettings);
+AutoModSettings.schema.path('newUserRestrictions').default(() => defaultSettings.newUserRestrictions);
+
+export { AutoModSettings };
 export const UserWarning = mongoose.model('UserWarning', userWarningSchema);
 export const MessageTracker = mongoose.model('MessageTracker', messageTrackerSchema);
 export const MultiJoinTracker = mongoose.model('MultiJoinTracker', multiJoinTrackerSchema);
@@ -210,8 +288,8 @@ const communitySchema = new mongoose.Schema({
     welcomeMessage: { type: String, default: "" },
     rules: { type: String, default: "" }
   },
-  admins: [{ 
-    userId: Number, 
+  admins: [{
+    userId: Number,
     userName: String,
     permissions: {
       canAddGroups: { type: Boolean, default: false },
@@ -269,4 +347,5 @@ const Community = mongoose.model('Community', communitySchema);
 const Group = mongoose.model('Group', groupSchema);
 const GlobalBan = mongoose.model('GlobalBan', globalBanSchema);
 const UserCommunity = mongoose.model('UserCommunity', userCommunitySchema);
+
 export { Community, Group, GlobalBan, UserCommunity };

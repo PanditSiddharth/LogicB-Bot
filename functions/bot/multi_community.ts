@@ -1408,7 +1408,8 @@ ${adminList}
     });
 
     // Search user in community
-    bot.command("finduser", async (ctx: any) => {
+    bot.command("finduser", 
+      async (ctx: any) => {
       try {
         const community = await this.getActiveCommunity(ctx.from.id);
         if (!community) return ctx.reply("❌ No active community.");
@@ -1455,7 +1456,8 @@ ${adminList}
       } catch (error: any) {
         await ctx.reply(`❌ Error: ${error.message}`);
       }
-    });
+    }
+  );
 
     // Community statistics
     bot.command("stats", async (ctx: any) => {

@@ -12,15 +12,17 @@ import { initializeMultiCommunityBot } from "./functions/bot/multi_community";
 import { UtilityPart1 } from "./functions/bot/utility_commands_part1";
 import { UtilityPart2 } from "./functions/bot/utility_commands_part2";
 import { AutoModerationSystem } from "./functions/bot/auto_moderation";
+import { AutoModUI } from "./functions/bot/auto_moderation_ui";
 dotenv.config();
 
 
 const bot = new Telegraf(process.env.BOT_TOKEN!);
 mongoose.connect(process.env.MONGODB_URI!).then(() => {
 new AutoModerationSystem(bot);
+AutoModUI.initialize(bot);
 UtilityPart1.initialize(bot);
 UtilityPart2.initialize(bot);
-initializeMultiCommunityBot(bot)
+initializeMultiCommunityBot(bot);
 // UtilityCommands.initialize(bot);
   console.log("Connected to MongoDB");
 }).catch(err => {
