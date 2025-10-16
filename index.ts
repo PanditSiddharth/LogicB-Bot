@@ -29,7 +29,11 @@ if (!process.env.MONGODB_URI) {
 }
 
 // Initialize bot
-const bot = new Telegraf(process.env.BOT_TOKEN);
+const bot = new Telegraf(process.env.BOT_TOKEN, {
+  telegram: {
+    apiRoot: process.env.API_ROOT || 'https://api.telegram.org',
+  }
+});
 
 // MongoDB connection with better error handling
 mongoose.connect(process.env.MONGODB_URI)

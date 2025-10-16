@@ -4,6 +4,7 @@
 // ============================================
 
 import { BotHelpers } from '../utils/helpers';
+import { MessageManager } from '../utils/messageManager';
 
 export interface UIComponent {
   message: string;
@@ -22,15 +23,16 @@ export class AutoModUIComponents {
   static async updateUI(ctx: any, settings: any, section: string) {
     try {
       const component = await this.getComponent(settings, section);
-      await ctx.editMessageText(component.message, {
-        parse_mode: "Markdown",
-        reply_markup: component.keyboard,
-        chat_id: ctx.chat?.id,
-        message_id: ctx.callbackQuery?.message?.message_id
-      });
+      await MessageManager.updateUI(ctx, `automod_${section}`, component);
+      
+      if (ctx.callbackQuery) {
+        await ctx.answerCbQuery().catch(() => {});
+      }
     } catch (error) {
       console.error('UI Update Error:', error);
-      await ctx.answerCbQuery('❌ Error updating UI', true).catch(() => {});
+      if (ctx.callbackQuery) {
+        await ctx.answerCbQuery('❌ Error updating UI', true).catch(() => {});
+      }
     }
   }
 
@@ -165,7 +167,7 @@ ${enabled(s.reportSettings)} Reports
 *Configuration:*
 • Max Messages: ${spam.maxMessages || 5}
 • Time Window: ${spam.timeWindow || 10} seconds
-• Action: ${spam.action || 'mute'}
+• Action: ${spam.action?.toUpperCase() || 'MUTE'}
 • Mute Duration: ${BotHelpers.formatDuration(spam.muteDuration || 3600)}
 
 *How it Works:*
@@ -174,11 +176,21 @@ If user sends more than ${spam.maxMessages || 5} messages in ${spam.timeWindow |
 *Commands:*
 \`/antispam_toggle\` - Enable/Disable
 \`/antispam_limit 5\` - Set max messages
-\`/antispam_window 10\` - Set time window
-\`/antispam_action mute\` - Set action
-\`/antispam_duration 3600\` - Mute duration (seconds)
+\`/antispam_window 10\` - Time window`;
 
-*Actions:* warn | mute | kick | ban`;
+    const actionButtons = [
+      { text: `${spam.action === 'warn' ? '✅' : ''} Warn`, callback_data: 'set_action_antispam_warn' },
+      { text: `${spam.action === 'mute' ? '✅' : ''} Mute`, callback_data: 'set_action_antispam_mute' },
+      { text: `${spam.action === 'kick' ? '✅' : ''} Kick`, callback_data: 'set_action_antispam_kick' },
+      { text: `${spam.action === 'ban' ? '✅' : ''} Ban`, callback_data: 'set_action_antispam_ban' }
+    ];
+
+    const durationButtons = spam.action === 'mute' ? [
+      { text: '1h', callback_data: 'set_duration_antispam_3600' },
+      { text: '6h', callback_data: 'set_duration_antispam_21600' },
+      { text: '12h', callback_data: 'set_duration_antispam_43200' },
+      { text: '24h', callback_data: 'set_duration_antispam_86400' }
+    ] : [];
 
     const keyboard = {
       inline_keyboard: [
@@ -186,6 +198,8 @@ If user sends more than ${spam.maxMessages || 5} messages in ${spam.timeWindow |
           { text: spam.enabled ? "❌ Disable" : "✅ Enable", 
             callback_data: "toggle_antispam" }
         ],
+        actionButtons,
+        ...durationButtons.length > 0 ? [durationButtons] : [],
         [
           { text: "🔙 Back to Auto-Mod", callback_data: "back_automod" },
           { text: "❌ Close", callback_data: "close" }
@@ -209,7 +223,7 @@ If user sends more than ${spam.maxMessages || 5} messages in ${spam.timeWindow |
 
 *Configuration:*
 • Max Repeats: ${flood.maxRepeats || 3}
-• Action: ${flood.action || 'mute'}
+• Action: ${flood.action?.toUpperCase() || 'MUTE'}
 
 *How it Works:*
 If user sends the same message ${flood.maxRepeats || 3} times, they will be ${flood.action || 'muted'}.
@@ -219,10 +233,14 @@ User sends "spam spam spam" → Action triggered
 
 *Commands:*
 \`/antiflood_toggle\` - Enable/Disable
-\`/antiflood_limit 3\` - Set max repeats
-\`/antiflood_action mute\` - Set action
+\`/antiflood_limit 3\` - Set max repeats`;
 
-*Actions:* warn | mute | kick | ban`;
+    const actionButtons = [
+      { text: `${flood.action === 'warn' ? '✅' : ''} Warn`, callback_data: 'set_action_antiflood_warn' },
+      { text: `${flood.action === 'mute' ? '✅' : ''} Mute`, callback_data: 'set_action_antiflood_mute' },
+      { text: `${flood.action === 'kick' ? '✅' : ''} Kick`, callback_data: 'set_action_antiflood_kick' },
+      { text: `${flood.action === 'ban' ? '✅' : ''} Ban`, callback_data: 'set_action_antiflood_ban' }
+    ];
 
     const keyboard = {
       inline_keyboard: [
@@ -230,6 +248,7 @@ User sends "spam spam spam" → Action triggered
           { text: flood.enabled ? "❌ Disable" : "✅ Enable", 
             callback_data: "toggle_antiflood" }
         ],
+        actionButtons,
         [
           { text: "🔙 Back to Auto-Mod", callback_data: "back_automod" },
           { text: "❌ Close", callback_data: "close" }
@@ -308,7 +327,6 @@ ${icon(media.blockLinks)} Links
   // ============================================
   private static getMultiJoinUI(settings: any): UIComponent {
     const mj = settings?.multiJoinDetection || {};
-    const timeWindow = BotHelpers.formatDuration(mj.timeWindow || 3600);
     
     const message = `
 👥 *Multi-Join Detection*
@@ -317,29 +335,35 @@ ${icon(media.blockLinks)} Links
 
 *Configuration:*
 • Max Groups: ${mj.maxGroupsInTime || 5}
-• Time Window: ${timeWindow}
-• Action: ${mj.action || 'report'}
-• Auto Report: ${mj.autoReport ? 'Yes ✅' : 'No ❌'}
+• Time Window: ${BotHelpers.formatDuration(mj.timeWindow || 3600)}
+• Action: ${mj.action?.toUpperCase() || 'REPORT'}
+• Auto Report: ${mj.autoReport ? '✅' : '❌'}
 
 *How it Works:*
-If user joins more than ${mj.maxGroupsInTime || 5} groups in ${timeWindow}, action is triggered.
-
-*Use Case:*
-Prevent spammers who join multiple groups quickly to advertise.
+If user joins ${mj.maxGroupsInTime || 5} groups within ${BotHelpers.formatDuration(mj.timeWindow || 3600)}, they will be ${mj.action || 'reported'}.
 
 *Commands:*
 \`/multijoin_toggle\` - Enable/Disable
 \`/multijoin_limit 5\` - Set max groups
-\`/multijoin_window 1h\` - Time window
-\`/multijoin_action report\` - Set action
+\`/multijoin_window 1h\` - Set time window`;
 
-*Actions:* warn | kick | ban | report`;
+    const actionButtons = [
+      { text: `${mj.action === 'warn' ? '✅' : ''} Warn`, callback_data: 'set_action_multijoin_warn' },
+      { text: `${mj.action === 'kick' ? '✅' : ''} Kick`, callback_data: 'set_action_multijoin_kick' },
+      { text: `${mj.action === 'ban' ? '✅' : ''} Ban`, callback_data: 'set_action_multijoin_ban' },
+      { text: `${mj.action === 'report' ? '✅' : ''} Report`, callback_data: 'set_action_multijoin_report' }
+    ];
 
     const keyboard = {
       inline_keyboard: [
         [
           { text: mj.enabled ? "❌ Disable" : "✅ Enable", 
             callback_data: "toggle_multijoin" }
+        ],
+        actionButtons,
+        [
+          { text: mj.autoReport ? "❌ Disable Auto-Report" : "✅ Enable Auto-Report",
+            callback_data: "set_action_multijoin_autoreport" }
         ],
         [
           { text: "🔙 Back to Auto-Mod", callback_data: "back_automod" }
@@ -365,7 +389,7 @@ Prevent spammers who join multiple groups quickly to advertise.
 *Configuration:*
 • Max Warnings: ${warn.maxWarnings || 3}
 • Warning Expiry: ${expiry}
-• Action on Max: ${warn.actionOnMax || 'ban'}
+• Action on Max: ${warn.actionOnMax?.toUpperCase() || 'BAN'}
 
 *How it Works:*
 1. Admin issues warning: \`/warn\`
@@ -377,14 +401,14 @@ Prevent spammers who join multiple groups quickly to advertise.
 \`/warn\` - Warn user (reply)
 \`/warnings\` - View warnings (reply)
 \`/clearwarnings\` - Clear (reply)
-
-*Settings:*
-\`/warning_toggle\` - Enable/Disable
 \`/warning_max 3\` - Set max warnings
-\`/warning_expiry 7\` - Expiry (days)
-\`/warning_action ban\` - Action
+\`/warning_expiry 7\` - Expiry (days)`;
 
-*Actions:* mute | kick | ban`;
+    const actionButtons = [
+      { text: `${warn.actionOnMax === 'mute' ? '✅' : ''} Mute`, callback_data: 'set_action_warnings_mute' },
+      { text: `${warn.actionOnMax === 'kick' ? '✅' : ''} Kick`, callback_data: 'set_action_warnings_kick' },
+      { text: `${warn.actionOnMax === 'ban' ? '✅' : ''} Ban`, callback_data: 'set_action_warnings_ban' }
+    ];
 
     const keyboard = {
       inline_keyboard: [
@@ -392,6 +416,7 @@ Prevent spammers who join multiple groups quickly to advertise.
           { text: warn.enabled ? "❌ Disable" : "✅ Enable", 
             callback_data: "toggle_warnings" }
         ],
+        actionButtons,
         [
           { text: "🔙 Back to Auto-Mod", callback_data: "back_automod" }
         ]

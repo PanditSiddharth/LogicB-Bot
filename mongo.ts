@@ -87,14 +87,14 @@ const defaultSettings = {
     warningsBeforePunish: 3
   },
   antiSpam: {
-    enabled: true,
+    enabled: false,
     maxMessages: 5,
     timeWindow: 10,
     action: 'mute' as const,
     muteDuration: 3600
   },
   antiFlood: {
-    enabled: true,
+    enabled: false,
     maxRepeats: 3,
     action: 'mute'
   },
