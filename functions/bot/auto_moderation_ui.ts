@@ -1,243 +1,251 @@
+// ============================================
+// OPTIMIZED AUTO-MODERATION UI
+// functions/bot/auto_moderation_ui.ts
+// ============================================
+
 import { Telegraf } from 'telegraf';
-import { AutoModSettings, UserCommunity, Community } from '../../mongo';
+import { AutoModSettings } from '../../mongo';
 import { AutoModUIComponents } from './automod_ui_components';
-
-// Helper to parse time strings like 15d, 6d, 1d, 1h, 1m, 1s
-function parseDuration(str: string): number | null {
-  const regex = /^(\d+)([dhms])$/i;
-  const match = str.match(regex);
-  if (!match) return null;
-  const value = parseInt(match[1], 10);
-  const unit = match[2].toLowerCase();
-  switch (unit) {
-    case 'd': return value * 86400;
-    case 'h': return value * 3600;
-    case 'm': return value * 60;
-    case 's': return value;
-    default: return null;
-  }
-}
-
+import { BotHelpers } from '../utils/helpers';
 
 export class AutoModUI {
-  static async getActiveCommunity(userId: number) {
-    const userComm = await UserCommunity.findOne({ userId });
-    if (!userComm || !userComm.activeCommunity) return null;
-    return await Community.findOne({ communityId: userComm.activeCommunity });
-  }
+  private static readonly TOGGLE_COMMANDS = [
+    { command: 'media_toggle', field: 'mediaRestrictions' },
+    { command: 'antispam_toggle', field: 'antiSpam' },
+    { command: 'antiflood_toggle', field: 'antiFlood' },
+    { command: 'warning_toggle', field: 'warningSystem' },
+    { command: 'report_toggle', field: 'reportSettings' },
+    { command: 'newuser_toggle', field: 'newUserRestrictions' },
+    { command: 'multijoin_toggle', field: 'multiJoinDetection' },
+    { command: 'autodelete_toggle', field: 'autoDelete' }
+  ];
+
+  private static readonly MENU_BUTTONS = [
+    'automod_words',
+    'automod_spam', 
+    'automod_flood',
+    'automod_media',
+    'automod_multijoin',
+    'automod_warnings',
+    'automod_autodelete',
+    'automod_reports',
+    'automod_newusers',
+    'back_automod'
+  ];
+
+  private static readonly FIELD_MAP: Record<string, string> = {
+    'words': 'bannedWords',
+    'antispam': 'antiSpam',
+    'antiflood': 'antiFlood', 
+    'media': 'mediaRestrictions',
+    'multijoin': 'multiJoinDetection',
+    'warnings': 'warningSystem',
+    'autodelete': 'autoDelete',
+    'reports': 'reportSettings',
+    'newusers': 'newUserRestrictions'
+  };
+
+  private static readonly MEDIA_FIELD_MAP: Record<string, string> = {
+    'photos': 'blockPhotos',
+    'videos': 'blockVideos', 
+    'stickers': 'blockStickers',
+    'gifs': 'blockGifs',
+    'docs': 'blockDocuments',
+    'links': 'blockLinks'
+  };
 
   static initialize(bot: Telegraf) {
     console.log("🔧 Loading Auto-Mod UI...");
     this.initializeAutoModCommand(bot);
-    this.initializeAutoModCallbacks(bot);
+    this.initializeMenuCallbacks(bot);
+    this.initializeToggleCallbacks(bot);
+    this.initializeMediaToggles(bot);
     this.initializeQuickToggles(bot);
     console.log("✅ Auto-Mod UI Loaded!");
   }
 
-  private static async initializeAutoModCommand(bot: Telegraf) {
+  // ============================================
+  // MAIN COMMAND
+  // ============================================
+  private static initializeAutoModCommand(bot: Telegraf) {
     bot.command("automod", async (ctx: any) => {
+      // Rate limit check
+      if (!BotHelpers.checkRateLimit(`automod_${ctx.from.id}`, 2000)) {
+        return;
+      }
+
       try {
-        const community = await AutoModUI.getActiveCommunity(ctx.from.id);
+        const community = await BotHelpers.getActiveCommunity(ctx.from.id);
         if (!community) {
-          return ctx.reply("❌ No active community set. Use /community first.");
+          return ctx.reply("❌ No active community. Use /mycommunities");
         }
 
-        const settings = await AutoModSettings.findOne({ 
-          communityId: community.communityId 
-        });
-
-        if (!settings) return;
-
+        const settings = await this.getOrCreateSettings(community.communityId);
         const component = await AutoModUIComponents.getComponent(settings, 'back_automod');
+        
         await ctx.reply(component.message, {
           parse_mode: "Markdown",
           reply_markup: component.keyboard
         });
-      } catch (error: any) {
-        await ctx.reply(`❌ Error: ${error.message}`);
+      } catch (error) {
+        await BotHelpers.handleError(ctx, error);
       }
     });
   }
 
-  private static initializeAutoModCallbacks(bot: Telegraf) {
-    // Initialize all menu buttons to use components
-    const menuButtons = [
-      'automod_words',
-      'automod_spam', 
-      'automod_flood',
-      'automod_media',
-      'automod_multijoin',
-      'automod_warnings',
-      'automod_autodelete',
-      'automod_reports',
-      'automod_newusers',
-      'back_automod'
-    ];
-
-    menuButtons.forEach(button => {
+  // ============================================
+  // MENU CALLBACKS
+  // ============================================
+  private static initializeMenuCallbacks(bot: Telegraf) {
+    this.MENU_BUTTONS.forEach(button => {
       bot.action(button, async (ctx: any) => {
         try {
           await ctx.answerCbQuery();
-          const community = await AutoModUI.getActiveCommunity(ctx.from.id);
+          
+          const community = await BotHelpers.getActiveCommunity(ctx.from.id);
           if (!community) {
-            await ctx.answerCbQuery("❌ No active community");
-            return;
+            return ctx.answerCbQuery("❌ No active community", true);
           }
-          const settings = await AutoModSettings.findOne({
-            communityId: community.communityId
-          });
-          if (!settings) {
-            await ctx.answerCbQuery("❌ Settings not found");
-            return;
-          }
+
+          const settings = await this.getOrCreateSettings(community.communityId);
           await AutoModUIComponents.updateUI(ctx, settings, button);
-        } catch (error: any) {
+        } catch (error) {
           console.error('Menu button error:', error);
-          await ctx.answerCbQuery("Error updating menu");
+          await ctx.answerCbQuery("❌ Error updating menu", true);
         }
       });
     });
+  }
 
-    // Feature toggle handlers
+  // ============================================
+  // FEATURE TOGGLE CALLBACKS
+  // ============================================
+  private static initializeToggleCallbacks(bot: Telegraf) {
     bot.action(/^toggle_(\w+)$/, async (ctx: any) => {
       try {
-        await ctx.answerCbQuery();
-        const community = await AutoModUI.getActiveCommunity(ctx.from.id);
+        const typee = ctx.match[1];
+        
+        const community = await BotHelpers.getActiveCommunity(ctx.from.id);
         if (!community) {
-          await ctx.answerCbQuery("❌ No active community");
-          return;
+          return ctx.answerCbQuery("❌ No active community", true);
         }
 
-        const type = ctx.match[1];
-        const settings = await AutoModSettings.findOne({
-          communityId: community.communityId
-        });
+        const settings = await this.getOrCreateSettings(community.communityId);
+        console.log(typee)
+        const field = this.FIELD_MAP[typee];
 
-        if (!settings) {
-          await ctx.answerCbQuery("❌ Settings not found");
-          return;
+        if (!field) {
+          return ctx.answerCbQuery("❌ Invalid toggle", true);
         }
 
-        const fieldMap: any = {
-          'words': 'bannedWords',
-          'antispam': 'antiSpam',
-          'antiflood': 'antiFlood', 
-          'media': 'mediaRestrictions',
-          'multijoin': 'multiJoinDetection',
-          'warnings': 'warningSystem',
-          'autodelete': 'autoDelete',
-          'reports': 'reportSettings',
-          'newusers': 'newUserRestrictions'
-        };
-
-        const field = fieldMap[type];
-        if (field) {
-          // Toggle enabled state
-          if (!settings[field]) settings[field] = {};
-          settings[field].enabled = !settings[field].enabled;
-          await settings.save();
-
-          // Update UI based on which section we're in
-          const uiSection = ctx.callbackQuery?.data?.replace('toggle_', 'automod_') || 'back_automod';
-          await AutoModUIComponents.updateUI(ctx, settings, uiSection);
+        // Toggle enabled state
+        if (!settings[field]) {
+          settings[field] = {};
         }
-      } catch (error: any) {
-        await ctx.answerCbQuery("Error toggling setting");
-      }
-    });
+        settings[field].enabled = !settings[field].enabled;
+        await settings.save();
 
-    // Media toggle handlers  
-    bot.action(/^toggle_media_(\w+)$/, async (ctx: any) => {
-      try {
-        const community = await AutoModUI.getActiveCommunity(ctx.from.id);
-        if (!community) {
-          await ctx.answerCbQuery("❌ No active community set");
-          return;
-        }
+        const status = settings[field].enabled ? '✅ Enabled' : '❌ Disabled';
+        await ctx.answerCbQuery(status);
 
-        const mediaType = ctx.match[1];
-        const settings = await AutoModSettings.findOne({
-          communityId: community.communityId
-        });
-
-        if (!settings) {
-          await ctx.answerCbQuery("❌ Settings not found");
-          return;
-        }
-
-        // Map callback data to settings field
-        const fieldMap: any = {
-          'photos': 'blockPhotos',
-          'videos': 'blockVideos', 
-          'stickers': 'blockStickers',
-          'gifs': 'blockGifs',
-          'docs': 'blockDocuments',
-          'links': 'blockLinks'
-        };
-
-        const field = fieldMap[mediaType];
-        if (field && settings.mediaRestrictions) {
-          // Toggle the specific media restriction
-          settings.mediaRestrictions[field] = !settings.mediaRestrictions[field];
-          await settings.save();
-
-          // Show success message in callback query
-          const status = settings.mediaRestrictions[field] ? '🚫 Blocked' : '✅ Allowed';
-          const mediaName = mediaType.charAt(0).toUpperCase() + mediaType.slice(1);
-          await ctx.answerCbQuery(`${status} ${mediaName}`);
-
-          // Update the UI using the standard updateUI method
-          await AutoModUIComponents.updateUI(ctx, settings, 'automod_media');
-        } else {
-          await ctx.answerCbQuery("❌ Invalid media type");
-        }
-      } catch (error: any) {
-        console.error('Media toggle error:', error);
-        await ctx.answerCbQuery("❌ Error toggling media setting");
+        // Update UI
+        const uiSection = `automod_${typee}`;
+        await AutoModUIComponents.updateUI(ctx, settings, uiSection);
+      } catch (error) {
+        await ctx.answerCbQuery("❌ Error toggling", true);
       }
     });
   }
 
-  private static initializeQuickToggles(bot: Telegraf) {
-    // Quick toggle commands for easy access
-    const toggleCommands = [
-      { command: 'media_toggle', field: 'mediaRestrictions' },
-      { command: 'antispam_toggle', field: 'antiSpam' },
-      { command: 'antiflood_toggle', field: 'antiFlood' },
-      { command: 'warning_toggle', field: 'warningSystem' },
-      { command: 'report_toggle', field: 'reportSettings' },
-      { command: 'newuser_toggle', field: 'newUserRestrictions' },
-      { command: 'multijoin_toggle', field: 'multiJoinDetection' },
-      { command: 'autodelete_toggle', field: 'autoDelete' }
-    ];
+  // ============================================
+  // MEDIA TOGGLE CALLBACKS
+  // ============================================
+  private static initializeMediaToggles(bot: Telegraf) {
+    bot.action(/^tm_(\w+)$/, async (ctx: any) => {
+      try {
+        const mediaType = ctx.match[1];
+        
+        const community = await BotHelpers.getActiveCommunity(ctx.from.id);
+        if (!community) {
+          return ctx.answerCbQuery("❌ No active community", true);
+        }
 
-    toggleCommands.forEach(({ command, field }) => {
+        const settings = await this.getOrCreateSettings(community.communityId);
+        const field = this.MEDIA_FIELD_MAP[mediaType];
+
+        if (!field || !settings.mediaRestrictions) {
+          return ctx.answerCbQuery("❌ Invalid media type", true);
+        }
+
+        // Toggle media restriction
+        settings.mediaRestrictions[field] = !settings.mediaRestrictions[field];
+        await settings.save();
+
+        // Show feedback
+        const status = settings.mediaRestrictions[field] ? '🚫 Blocked' : '✅ Allowed';
+        const mediaName = this.capitalizeFirst(mediaType);
+        await ctx.answerCbQuery(`${status} ${mediaName}`);
+
+        // Update UI
+        await AutoModUIComponents.updateUI(ctx, settings, 'automod_media');
+      } catch (error) {
+        console.error('Media toggle error:', error);
+        await ctx.answerCbQuery("❌ Error toggling media", true);
+      }
+    });
+  }
+
+  // ============================================
+  // QUICK TOGGLE COMMANDS
+  // ============================================
+  private static initializeQuickToggles(bot: Telegraf) {
+    this.TOGGLE_COMMANDS.forEach(({ command, field }) => {
       bot.command(command, async (ctx: any) => {
+        // Rate limit
+        if (!BotHelpers.checkRateLimit(`toggle_${ctx.from.id}`, 2000)) {
+          return;
+        }
+
         try {
-          const community = await AutoModUI.getActiveCommunity(ctx.from.id);
+          const community = await BotHelpers.getActiveCommunity(ctx.from.id);
           if (!community) {
-            return ctx.reply("❌ No active community set. Use /community first.");
+            return ctx.reply("❌ No active community. Use /mycommunities");
           }
 
-          const settings = await AutoModSettings.findOne({
-            communityId: community.communityId
-          });
-
-          if (!settings) return;
+          const settings = await this.getOrCreateSettings(community.communityId);
 
           // Toggle enabled state
-          if (!settings[field]) settings[field] = {};
+          if (!settings[field]) {
+            settings[field] = {};
+          }
           settings[field].enabled = !settings[field].enabled;
           await settings.save();
 
-          // Reply with new status
-          await ctx.reply(
-            `✅ ${field} ${settings[field].enabled ? 'enabled' : 'disabled'}`
-          );
-        } catch (error: any) {
-          await ctx.reply(`❌ Error: ${error.message}`);
+          const status = settings[field].enabled ? 'enabled ✅' : 'disabled ❌';
+          const featureName = field.replace(/([A-Z])/g, ' $1').toLowerCase();
+          
+          await ctx.reply(`✅ ${this.capitalizeFirst(featureName)} ${status}`);
+        } catch (error) {
+          await BotHelpers.handleError(ctx, error);
         }
       });
     });
+  }
+
+  // ============================================
+  // HELPER METHODS
+  // ============================================
+  private static async getOrCreateSettings(communityId: string) {
+    let settings = await AutoModSettings.findOne({ communityId });
+    
+    if (!settings) {
+      settings = await AutoModSettings.create({ communityId });
+    }
+    
+    return settings;
+  }
+
+  private static capitalizeFirst(str: string): string {
+    return str.charAt(0).toUpperCase() + str.slice(1);
   }
 }

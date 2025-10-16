@@ -12,11 +12,13 @@ I help manage multiple groups with:
 ✅ Message Tracking & Deletion
 
 *Quick Commands:*
-• \`/help\` - All commands
-• \`/automod\` - Auto-moderation
-• \`/dashboard\` - Control panel
+• help - All commands
+• /automod - Auto-moderation
+• /dashboard - Control panel
+• /mycommunities - Your communities
+• /messages - Messages Deletion
 
-*Setup:* Use \`/guide\` for tutorial
+*Setup:* Use /guide for tutorial
         `;
         
         await ctx.reply(welcomeMsg, { parse_mode: "Markdown" });
@@ -66,10 +68,10 @@ I help manage multiple groups with:
 • Force delete with scanning
 
 *Getting Started:*
-1. \`/createcommunity YourName\`
+1. /createcommunity YourName
 2. Add bot to groups as admin
-3. Use \`/addgroup\` in each group
-4. Configure \`/automod\`
+3. Use /addgroup in each group
+4. Configure /automod
 
 *Click buttons below for help* ⬇️
         `;
@@ -98,6 +100,7 @@ export const help = async (ctx: any) => {
           ],
           [
             { text: "📖 Full Guide", callback_data: "help_guide" },
+            { text: "❌ Close", callback_data: "close"}
           ]
         ]
       };
@@ -115,14 +118,23 @@ Choose a category:
 📊 *Advanced* - Power features
 
 *Quick Access:*
-\`/dashboard\` - Main panel
-\`/automod\` - Auto-mod
-\`/mycommunities\` - Your communities
-\`/guide\` - Tutorial
+/dashboard - Main panel
+/automod - Auto-mod
+/mycommunities - Your communities
+/guide - Tutorial
 
-*Examples:* \`/examples\`
+*Examples:* /examples
       `;
 
+      if(ctx.callbackQuery) {
+        await ctx.editMessageText(helpMsg, {
+          parse_mode: "Markdown",
+          reply_markup: keyboard
+        });
+        await ctx.answerCbQuery();
+        return;
+      }
+      else
       await ctx.reply(helpMsg, {
         parse_mode: "Markdown",
         reply_markup: keyboard
@@ -150,40 +162,40 @@ export const examples = async (ctx: any) => {
 💡 *REAL-WORLD EXAMPLES*
 
 *SCENARIO 1: User Posts Porn*
-\`\`\`
+
 /cgban 123456789 Porn content
 /delmessages 123456789 48
 /forcedelete 123456789
-\`\`\`
+
 
 *SCENARIO 2: Setup Community*
-\`\`\`
+
 /createcommunity IGNOU
 /addgroup (in each group)
 /addword spam scam porn
 /wordaction ban
 /togglewords
-\`\`\`
+
 
 *SCENARIO 3: Broadcast*
-\`\`\`
+
 Send message to bot
 Reply: /cbroadcast
-\`\`\`
+
 
 *SCENARIO 4: Delete Spammer*
-\`\`\`
+
 /delmessages 5860242015 48
-\`\`\`
+
 
 *SCENARIO 5: Add Admin*
-\`\`\`
+
 Reply: /addadmin
 /setperm ban yes
 /setperm broadcast no
-\`\`\`
 
-More: \`/help\`
+
+More: /help
       `;
 
       await ctx.reply(msg, { parse_mode: "Markdown" });
@@ -200,8 +212,8 @@ export const about =  async (ctx: any) => {
         `✅ Auto-moderation\n` +
         `✅ Message deletion\n` +
         `✅ 60+ commands\n\n` +
-        `*Commands:* \`/help\`\n` +
-        `*Tutorial:* \`/guide\``,
+        `*Commands:* /help\n` +
+        `*Tutorial:* /guide`,
         { parse_mode: "Markdown" }
       );
     }

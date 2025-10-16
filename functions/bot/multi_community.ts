@@ -4,7 +4,6 @@
 // ============================================
 
 import { Context, Telegraf } from "telegraf";
-import mongoose from "mongoose";
 import {  Community, Group, GlobalBan, UserCommunity } from "../../mongo"
 // ============================================
 // COMMUNITY MANAGEMENT CLASS
@@ -403,15 +402,15 @@ export class CommunityManager {
           );
         }
 
-        let message = `📁 *Groups in ${community.communityName}* (${groups.length})\n\n`;
+        let message = `📁 <b>Groups in ${community.communityName}</b> (${groups.length})\n\n`;
         
         groups.forEach((group, index) => {
-          message += `${index + 1}. *${group.groupName}*\n`;
+          message += `${index + 1}. <b>${group.groupName}</b>\n`;
           message += `   ${group.username ? `@${group.username}` : `ID: ${group.chatId}`}\n`;
           message += `   Added: ${group.addedAt.toLocaleDateString()}\n\n`;
         });
 
-        await ctx.reply(message, { parse_mode: "Markdown" });
+        await ctx.reply(message, { parse_mode: "html" });
       } catch (error: any) {
         await ctx.reply(`❌ Error: ${error.message}`);
       }

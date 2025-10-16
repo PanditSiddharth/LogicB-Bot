@@ -10,15 +10,15 @@ import { GlobalBan, Group } from "../../mongo";
 import { about, examples, guide, help, ping, start, version } from "../services/main";
 
 export class UtilityPart1 {
-  
+
   static initialize(bot: Telegraf) {
     console.log("🔧 Loading Part 1: Start, Help, Dashboard...");
-    
+
     this.initializeStartCommand(bot);
     this.initializeHelpSystem(bot);
     this.initializeDashboard(bot);
     this.initializeHelpCallbacks(bot);
-    
+
     console.log("✅ Part 1 Loaded!");
   }
 
@@ -32,9 +32,10 @@ export class UtilityPart1 {
   // HELP SYSTEM
   // ============================================
   private static initializeHelpSystem(bot: Telegraf) {
-    
+
     // Main Help
     bot.command("help", help);
+    bot.action("help", help);
 
     // Guide
     bot.command("guide", guide);
@@ -68,17 +69,17 @@ export class UtilityPart1 {
           );
         }
 
-       
-    
-        
-        const groups = await Group.countDocuments({ 
+
+
+
+        const groups = await Group.countDocuments({
           communityId: community.communityId,
-          isActive: true 
+          isActive: true
         });
-        
-        const bans = await GlobalBan.countDocuments({ 
+
+        const bans = await GlobalBan.countDocuments({
           communityId: community.communityId,
-          isActive: true 
+          isActive: true
         });
 
         const message = `
@@ -113,7 +114,7 @@ export class UtilityPart1 {
           ]
         };
 
-        await ctx.reply(message, { 
+        await ctx.reply(message, {
           parse_mode: "Markdown",
           reply_markup: keyboard
         });
@@ -127,7 +128,7 @@ export class UtilityPart1 {
   // HELP CALLBACKS
   // ============================================
   private static initializeHelpCallbacks(bot: Telegraf) {
-    
+
     // Community Help
     bot.action("help_community", async (ctx: any) => {
       await ctx.answerCbQuery();
@@ -202,7 +203,16 @@ export class UtilityPart1 {
 \`/addword spam scam\`
 \`/wordaction ban\`
       `;
-      await ctx.editMessageText(msg, { parse_mode: "Markdown" });
+      await ctx.editMessageText(msg, {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [[
+            { text: "🔙 Back", callback_data: "help" },
+            { text: "❌ Close", callback_data: "close" }
+          ]]
+        }
+      }
+      );
     });
 
     // Moderation Help
@@ -238,7 +248,15 @@ export class UtilityPart1 {
 \`/ban 123456 Spam\`
 \`/mute 789012 2h\`
       `;
-      await ctx.editMessageText(msg, { parse_mode: "Markdown" });
+      await ctx.editMessageText(msg, {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [[
+            { text: "🔙 Back", callback_data: "help" },
+            { text: "❌ Close", callback_data: "close" }
+          ]]
+        }
+      })
     });
 
     // Deletion Help
@@ -276,7 +294,15 @@ Only ≤48h messages can be deleted
 \`/scandelete 123456\`
 \`/forcedelete 789012\`
       `;
-      await ctx.editMessageText(msg, { parse_mode: "Markdown" });
+      await ctx.editMessageText(msg, {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [[
+            { text: "🔙 Back", callback_data: "help" },
+            { text: "❌ Close", callback_data: "close" }
+          ]]
+        }
+      })
     });
 
     // Settings Help
@@ -310,7 +336,15 @@ Only ≤48h messages can be deleted
 *Example:*
 Reply: \`/setperm ban yes\`
       `;
-      await ctx.editMessageText(msg, { parse_mode: "Markdown" });
+      await ctx.editMessageText(msg, {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [[
+            { text: "🔙 Back", callback_data: "help" },
+            { text: "❌ Close", callback_data: "close" }
+          ]]
+        }
+      })
     });
 
     // Advanced Help
@@ -350,7 +384,15 @@ Auto-mod runs 24/7:
 • 48h message deletion
 • Rate limits apply
       `;
-      await ctx.editMessageText(msg, { parse_mode: "Markdown" });
+            await ctx.editMessageText(msg, {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [[
+            { text: "🔙 Back", callback_data: "help" },
+            { text: "❌ Close", callback_data: "close" }
+          ]]
+        }
+      })
     });
 
     // Guide
@@ -394,7 +436,15 @@ Stats: \`/dashboard\`
 
 Use \`/help\` anytime!
       `;
-      await ctx.editMessageText(msg, { parse_mode: "Markdown" });
+            await ctx.editMessageText(msg, {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [[
+            { text: "🔙 Back", callback_data: "help" },
+            { text: "❌ Close", callback_data: "close" }
+          ]]
+        }
+      })
     });
 
     // Quick Start
@@ -428,7 +478,15 @@ Send "spam" → Deletes
 
 *Full:* \`/guide\`
       `;
-      await ctx.editMessageText(msg, { parse_mode: "Markdown" });
+            await ctx.editMessageText(msg, {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [[
+            { text: "🔙 Back", callback_data: "help" },
+            { text: "❌ Close", callback_data: "close" }
+          ]]
+        }
+      })
     });
   }
 
@@ -439,12 +497,12 @@ Send "spam" → Deletes
     try {
       const UserCommunity = mongoose.model('UserCommunity');
       const Community = mongoose.model('Community');
-      
+
       const userComm = await UserCommunity.findOne({ userId });
       if (!userComm || !userComm.activeCommunity) return null;
-      
-      return await Community.findOne({ 
-        communityId: userComm.activeCommunity 
+
+      return await Community.findOne({
+        communityId: userComm.activeCommunity
       });
     } catch {
       return null;

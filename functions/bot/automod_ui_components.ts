@@ -1,11 +1,9 @@
 // ============================================
-// AUTO-MODERATION UI COMPONENTS
+// OPTIMIZED AUTO-MODERATION UI COMPONENTS
 // functions/bot/automod_ui_components.ts
-// Contains all UI messages and keyboard layouts
 // ============================================
 
-import { Markup } from 'telegraf';
-import { AutoModSettings } from "../../mongo";
+import { BotHelpers } from '../utils/helpers';
 
 export interface UIComponent {
   message: string;
@@ -19,25 +17,65 @@ export interface UIComponent {
 
 export class AutoModUIComponents {
   // ============================================
-  // MAIN DASHBOARD
+  // MAIN UPDATE METHOD
   // ============================================
-  static getDashboardUI(settings: any, communityName: string) {
+  static async updateUI(ctx: any, settings: any, section: string) {
+    try {
+      const component = await this.getComponent(settings, section);
+      await ctx.editMessageText(component.message, {
+        parse_mode: "Markdown",
+        reply_markup: component.keyboard,
+        chat_id: ctx.chat?.id,
+        message_id: ctx.callbackQuery?.message?.message_id
+      });
+    } catch (error) {
+      console.error('UI Update Error:', error);
+      await ctx.answerCbQuery('❌ Error updating UI', true).catch(() => {});
+    }
+  }
+
+  // ============================================
+  // COMPONENT ROUTER
+  // ============================================
+  static async getComponent(settings: any, section: string): Promise<UIComponent> {
+    const componentMap: Record<string, () => UIComponent> = {
+      'automod_words': () => this.getBannedWordsUI(settings),
+      'automod_spam': () => this.getAntiSpamUI(settings),
+      'automod_flood': () => this.getAntiFloodUI(settings),
+      'automod_media': () => this.getMediaFilterUI(settings),
+      'automod_multijoin': () => this.getMultiJoinUI(settings),
+      'automod_warnings': () => this.getWarningSystemUI(settings),
+      'automod_autodelete': () => this.getAutoDeleteUI(settings),
+      'automod_reports': () => this.getReportsUI(settings),
+      'automod_newusers': () => this.getNewUsersUI(settings),
+      'back_automod': () => this.getDashboardUI(settings, '')
+    };
+
+    const component = componentMap[section];
+    return component ? component() : this.getDashboardUI(settings, '');
+  }
+
+  // ============================================
+  // DASHBOARD
+  // ============================================
+  private static getDashboardUI(settings: any, communityName: string): UIComponent {
+    const s = settings; // Shorthand
+    const enabled = (field: any) => field?.enabled ? '✅' : '❌';
+    
     const message = `
 ⚙️ *Auto-Moderation Dashboard*
 
-*Community:* ${communityName}
-
 *Current Status:*
-${settings.bannedWords?.enabled ? '✅' : '❌'} Banned Words (${settings.bannedWords?.words?.length || 0} words)
-${settings.antiSpam?.enabled ? '✅' : '❌'} Anti-Spam
-${settings.antiFlood?.enabled ? '✅' : '❌'} Anti-Flood
-${settings.mediaRestrictions?.enabled ? '✅' : '❌'} Media Restrictions
-${settings.multiJoinDetection?.enabled ? '✅' : '❌'} Multi-Join Detection
-${settings.warningSystem?.enabled ? '✅' : '❌'} Warning System
-${settings.autoDelete?.enabled ? '✅' : '❌'} Auto-Delete
-${settings.reportSettings?.enabled ? '✅' : '❌'} Reports
+${enabled(s.bannedWords)} Banned Words (${s.bannedWords?.words?.length || 0} words)
+${enabled(s.antiSpam)} Anti-Spam
+${enabled(s.antiFlood)} Anti-Flood
+${enabled(s.mediaRestrictions)} Media Restrictions
+${enabled(s.multiJoinDetection)} Multi-Join Detection
+${enabled(s.warningSystem)} Warning System
+${enabled(s.autoDelete)} Auto-Delete
+${enabled(s.reportSettings)} Reports
 
-*Click buttons below to configure:*
+*Click buttons to configure:*
     `;
 
     const keyboard = {
@@ -59,7 +97,8 @@ ${settings.reportSettings?.enabled ? '✅' : '❌'} Reports
           { text: "📢 Reports", callback_data: "automod_reports" }
         ],
         [
-          { text: "🆕 New Users", callback_data: "automod_newusers" }
+          { text: "🆕 New Users", callback_data: "automod_newusers" },
+          
         ]
       ]
     };
@@ -68,114 +107,9 @@ ${settings.reportSettings?.enabled ? '✅' : '❌'} Reports
   }
 
   // ============================================
-  // MEDIA FILTER UI
+  // BANNED WORDS
   // ============================================
-  static getMediaFilterUI(settings: any) {
-    const message = `
-🎬 *Media Restrictions*
-
-*Status:* ${settings.mediaRestrictions?.enabled ? 'Enabled ✅' : 'Disabled ❌'}
-
-*Currently Blocked:*
-${settings.mediaRestrictions?.blockPhotos ? '✅' : '❌'} Photos
-${settings.mediaRestrictions?.blockVideos ? '✅' : '❌'} Videos
-${settings.mediaRestrictions?.blockStickers ? '✅' : '❌'} Stickers
-${settings.mediaRestrictions?.blockGifs ? '✅' : '❌'} GIFs/Animations
-${settings.mediaRestrictions?.blockDocuments ? '✅' : '❌'} Documents
-${settings.mediaRestrictions?.blockLinks ? '✅' : '❌'} Links
-
-*Action:* ${settings.mediaRestrictions?.action || 'delete'}
-
-*Commands:*
-\`/media_toggle\` - Enable/Disable
-\`/media_block photos\` - Block type
-\`/media_allow photos\` - Allow type
-
-*Types:* photos | videos | stickers | gifs | documents | links
-    `;
-
-    const keyboard = {
-      inline_keyboard: [
-        [
-          { text: settings.mediaRestrictions?.enabled ? "❌ Disable" : "✅ Enable", 
-            callback_data: "toggle_media" }
-        ],
-        ...(settings.mediaRestrictions?.enabled ? [
-          [
-            { text: `${settings.mediaRestrictions?.blockPhotos ? '❌' : '✅'} Photos`,
-              callback_data: "toggle_media_photos" },
-            { text: `${settings.mediaRestrictions?.blockVideos ? '❌' : '✅'} Videos`,
-              callback_data: "toggle_media_videos" }
-          ],
-          [
-            { text: `${settings.mediaRestrictions?.blockStickers ? '❌' : '✅'} Stickers`,
-              callback_data: "toggle_media_stickers" },
-            { text: `${settings.mediaRestrictions?.blockGifs ? '❌' : '✅'} GIFs`,
-              callback_data: "toggle_media_gifs" }
-          ],
-          [
-            { text: `${settings.mediaRestrictions?.blockDocuments ? '❌' : '✅'} Documents`,
-              callback_data: "toggle_media_docs" },
-            { text: `${settings.mediaRestrictions?.blockLinks ? '❌' : '✅'} Links`,
-              callback_data: "toggle_media_links" }
-          ]
-        ] : []),
-        [
-          { text: "🔙 Back to Auto-Mod", callback_data: "back_automod" }
-        ]
-      ]
-    };
-
-    return { message, keyboard };
-  }
-
-  // ============================================
-  // ANTI-SPAM UI
-  // ============================================
-  static getAntiSpamUI(settings: any) {
-    const message = `
-📊 *Anti-Spam Protection*
-
-*Status:* ${settings.antiSpam?.enabled ? 'Enabled ✅' : 'Disabled ❌'}
-
-*Configuration:*
-• Max Messages: ${settings.antiSpam?.maxMessages || 5}
-• Time Window: ${settings.antiSpam?.timeWindow || 10} seconds
-• Action: ${settings.antiSpam?.action || 'mute'}
-• Mute Duration: ${(settings.antiSpam?.muteDuration || 3600) / 60} minutes
-
-*How it Works:*
-If user sends more than ${settings.antiSpam?.maxMessages || 5} messages in ${settings.antiSpam?.timeWindow || 10} seconds, they will be ${settings.antiSpam?.action || 'muted'}.
-
-*Commands:*
-\`/antispam_toggle\` - Enable/Disable
-\`/antispam_limit 5\` - Set max messages
-\`/antispam_window 10\` - Set time window
-\`/antispam_action mute\` - Set action
-\`/antispam_duration 3600\` - Mute duration (seconds)
-
-*Actions:* warn | mute | kick | ban
-    `;
-
-    const keyboard = {
-      inline_keyboard: [
-        [
-          { text: settings.antiSpam?.enabled ? "❌ Disable" : "✅ Enable", 
-            callback_data: "toggle_antispam" }
-        ],
-        [
-          { text: "🔙 Back to Auto-Mod", callback_data: "back_automod" }
-        ]
-      ]
-    };
-
-    return { message, keyboard };
-  }
-
-  // ============================================
-  // BANNED WORDS UI
-  // ============================================
-  static getBannedWordsUI(settings: any): UIComponent {
+  private static getBannedWordsUI(settings: any): UIComponent {
     const words = settings?.bannedWords?.words || [];
     const wordsList = words.length > 0 
       ? words.slice(0, 10).join(', ') + (words.length > 10 ? '...' : '')
@@ -184,7 +118,7 @@ If user sends more than ${settings.antiSpam?.maxMessages || 5} messages in ${set
     const message = `
 🚫 *Banned Words Filter*
 
-*Status:* ${settings?.bannedWords?.enabled ? 'Enabled ✅' : 'Disabled ❌'}
+*Status:* ${settings?.bannedWords?.enabled ? '✅ Enabled' : '❌ Disabled'}
 *Total Words:* ${words.length}
 *Action:* ${settings?.bannedWords?.action || 'warn'}
 *Warnings Before Punish:* ${settings?.bannedWords?.warningsBeforePunish || 3}
@@ -205,11 +139,11 @@ If user sends more than ${settings.antiSpam?.maxMessages || 5} messages in ${set
       inline_keyboard: [
         [
           { text: settings?.bannedWords?.enabled ? "❌ Disable" : "✅ Enable", 
-            callback_data: "toggle_words" },
-          { text: "📝 View All Words", callback_data: "view_words" }
+            callback_data: "toggle_words" }
         ],
         [
-          { text: "🔙 Back to Auto-Mod", callback_data: "back_automod" }
+          { text: "🔙 Back", callback_data: "back_automod" },
+          { text: "❌ Close", callback_data: "close" }        
         ]
       ]
     };
@@ -218,20 +152,67 @@ If user sends more than ${settings.antiSpam?.maxMessages || 5} messages in ${set
   }
 
   // ============================================
-  // ANTI-FLOOD UI
+  // ANTI-SPAM
   // ============================================
-  static getAntiFloodUI(settings: any): UIComponent {
+  private static getAntiSpamUI(settings: any): UIComponent {
+    const spam = settings?.antiSpam || {};
+    
+    const message = `
+📊 *Anti-Spam Protection*
+
+*Status:* ${spam.enabled ? '✅ Enabled' : '❌ Disabled'}
+
+*Configuration:*
+• Max Messages: ${spam.maxMessages || 5}
+• Time Window: ${spam.timeWindow || 10} seconds
+• Action: ${spam.action || 'mute'}
+• Mute Duration: ${BotHelpers.formatDuration(spam.muteDuration || 3600)}
+
+*How it Works:*
+If user sends more than ${spam.maxMessages || 5} messages in ${spam.timeWindow || 10} seconds, they will be ${spam.action || 'muted'}.
+
+*Commands:*
+\`/antispam_toggle\` - Enable/Disable
+\`/antispam_limit 5\` - Set max messages
+\`/antispam_window 10\` - Set time window
+\`/antispam_action mute\` - Set action
+\`/antispam_duration 3600\` - Mute duration (seconds)
+
+*Actions:* warn | mute | kick | ban`;
+
+    const keyboard = {
+      inline_keyboard: [
+        [
+          { text: spam.enabled ? "❌ Disable" : "✅ Enable", 
+            callback_data: "toggle_antispam" }
+        ],
+        [
+          { text: "🔙 Back to Auto-Mod", callback_data: "back_automod" },
+          { text: "❌ Close", callback_data: "close" }
+        ]
+      ]
+    };
+
+    return { message, keyboard };
+  }
+
+  // ============================================
+  // ANTI-FLOOD
+  // ============================================
+  private static getAntiFloodUI(settings: any): UIComponent {
+    const flood = settings?.antiFlood || {};
+    
     const message = `
 🌊 *Anti-Flood Protection*
 
-*Status:* ${settings?.antiFlood?.enabled ? 'Enabled ✅' : 'Disabled ❌'}
+*Status:* ${flood.enabled ? '✅ Enabled' : '❌ Disabled'}
 
 *Configuration:*
-• Max Repeats: ${settings?.antiFlood?.maxRepeats || 3}
-• Action: ${settings?.antiFlood?.action || 'mute'}
+• Max Repeats: ${flood.maxRepeats || 3}
+• Action: ${flood.action || 'mute'}
 
 *How it Works:*
-If user sends the same message ${settings?.antiFlood?.maxRepeats || 3} times, they will be ${settings?.antiFlood?.action || 'muted'}.
+If user sends the same message ${flood.maxRepeats || 3} times, they will be ${flood.action || 'muted'}.
 
 *Example:*
 User sends "spam spam spam" → Action triggered
@@ -246,11 +227,12 @@ User sends "spam spam spam" → Action triggered
     const keyboard = {
       inline_keyboard: [
         [
-          { text: settings?.antiFlood?.enabled ? "❌ Disable" : "✅ Enable", 
+          { text: flood.enabled ? "❌ Disable" : "✅ Enable", 
             callback_data: "toggle_antiflood" }
         ],
         [
-          { text: "🔙 Back to Auto-Mod", callback_data: "back_automod" }
+          { text: "🔙 Back to Auto-Mod", callback_data: "back_automod" },
+          { text: "❌ Close", callback_data: "close" }
         ]
       ]
     };
@@ -259,22 +241,88 @@ User sends "spam spam spam" → Action triggered
   }
 
   // ============================================
-  // MULTI-JOIN UI
+  // MEDIA FILTER
   // ============================================
-  static getMultiJoinUI(settings: any): UIComponent {
+  private static getMediaFilterUI(settings: any): UIComponent {
+    const media = settings?.mediaRestrictions || {};
+    const icon = (blocked: boolean) => blocked ? '✅' : '❌';
+    
+    const message = `
+🎬 *Media Restrictions*
+
+*Status:* ${media.enabled ? '✅ Enabled' : '❌ Disabled'}
+
+*Currently Blocked:*
+${icon(media.blockPhotos)} Photos
+${icon(media.blockVideos)} Videos
+${icon(media.blockStickers)} Stickers
+${icon(media.blockGifs)} GIFs/Animations
+${icon(media.blockDocuments)} Documents
+${icon(media.blockLinks)} Links
+
+*Commands:*
+\`/media_toggle\` - Enable/Disable
+\`/media_block photos\` - Block type
+\`/media_allow photos\` - Allow type
+
+*Types:* photos | videos | stickers | gifs | documents | links`;
+
+    const keyboard = {
+      inline_keyboard: [
+        [
+          { text: media.enabled ? "❌ Disable" : "✅ Enable", 
+            callback_data: "toggle_media" }
+        ],
+        ...(media.enabled ? [
+          [
+            { text: `${icon(media.blockPhotos)} Photos`,
+              callback_data: "tm_photos" },
+            { text: `${icon(media.blockVideos)} Videos`,
+              callback_data: "tm_videos" }
+          ],
+          [
+            { text: `${icon(media.blockStickers)} Stickers`,
+              callback_data: "tm_stickers" },
+            { text: `${icon(media.blockGifs)} GIFs`,
+              callback_data: "tm_gifs" }
+          ],
+          [
+            { text: `${icon(media.blockDocuments)} Documents`,
+              callback_data: "tm_docs" },
+            { text: `${icon(media.blockLinks)} Links`,
+              callback_data: "tm_links" }
+          ]
+        ] : []),
+        [
+          { text: "🔙 Back", callback_data: "back_automod" },
+          { text: "❌ Close", callback_data: "close" }
+        ]
+      ]
+    };
+
+    return { message, keyboard };
+  }
+
+  // ============================================
+  // MULTI-JOIN
+  // ============================================
+  private static getMultiJoinUI(settings: any): UIComponent {
+    const mj = settings?.multiJoinDetection || {};
+    const timeWindow = BotHelpers.formatDuration(mj.timeWindow || 3600);
+    
     const message = `
 👥 *Multi-Join Detection*
 
-*Status:* ${settings?.multiJoinDetection?.enabled ? 'Enabled ✅' : 'Disabled ❌'}
+*Status:* ${mj.enabled ? '✅ Enabled' : '❌ Disabled'}
 
 *Configuration:*
-• Max Groups: ${settings?.multiJoinDetection?.maxGroupsInTime || 5}
-• Time Window: ${(settings?.multiJoinDetection?.timeWindow || 3600) / 60} minutes
-• Action: ${settings?.multiJoinDetection?.action || 'report'}
-• Auto Report: ${settings?.multiJoinDetection?.autoReport ? 'Yes ✅' : 'No ❌'}
+• Max Groups: ${mj.maxGroupsInTime || 5}
+• Time Window: ${timeWindow}
+• Action: ${mj.action || 'report'}
+• Auto Report: ${mj.autoReport ? 'Yes ✅' : 'No ❌'}
 
 *How it Works:*
-If user joins more than ${settings?.multiJoinDetection?.maxGroupsInTime || 5} groups in ${(settings?.multiJoinDetection?.timeWindow || 3600) / 60} minutes, action is triggered.
+If user joins more than ${mj.maxGroupsInTime || 5} groups in ${timeWindow}, action is triggered.
 
 *Use Case:*
 Prevent spammers who join multiple groups quickly to advertise.
@@ -282,7 +330,7 @@ Prevent spammers who join multiple groups quickly to advertise.
 *Commands:*
 \`/multijoin_toggle\` - Enable/Disable
 \`/multijoin_limit 5\` - Set max groups
-\`/multijoin_window 1d or 1h\` - Time window
+\`/multijoin_window 1h\` - Time window
 \`/multijoin_action report\` - Set action
 
 *Actions:* warn | kick | ban | report`;
@@ -290,7 +338,7 @@ Prevent spammers who join multiple groups quickly to advertise.
     const keyboard = {
       inline_keyboard: [
         [
-          { text: settings?.multiJoinDetection?.enabled ? "❌ Disable" : "✅ Enable", 
+          { text: mj.enabled ? "❌ Disable" : "✅ Enable", 
             callback_data: "toggle_multijoin" }
         ],
         [
@@ -303,24 +351,27 @@ Prevent spammers who join multiple groups quickly to advertise.
   }
 
   // ============================================
-  // WARNING SYSTEM UI
+  // WARNING SYSTEM
   // ============================================
-  static getWarningSystemUI(settings: any): UIComponent {
+  private static getWarningSystemUI(settings: any): UIComponent {
+    const warn = settings?.warningSystem || {};
+    const expiry = BotHelpers.formatDuration(warn.warningExpiry || 604800);
+    
     const message = `
 ⚠️ *Warning System*
 
-*Status:* ${settings?.warningSystem?.enabled ? 'Enabled ✅' : 'Disabled ❌'}
+*Status:* ${warn.enabled ? '✅ Enabled' : '❌ Disabled'}
 
 *Configuration:*
-• Max Warnings: ${settings?.warningSystem?.maxWarnings || 3}
-• Warning Expiry: ${(settings?.warningSystem?.warningExpiry || 604800) / 86400} days
-• Action on Max: ${settings?.warningSystem?.actionOnMax || 'ban'}
+• Max Warnings: ${warn.maxWarnings || 3}
+• Warning Expiry: ${expiry}
+• Action on Max: ${warn.actionOnMax || 'ban'}
 
 *How it Works:*
 1. Admin issues warning: \`/warn\`
-2. User gets warned (1/${settings?.warningSystem?.maxWarnings || 3})
-3. After ${settings?.warningSystem?.maxWarnings || 3} warnings → ${settings?.warningSystem?.actionOnMax || 'banned'}
-4. Warnings expire after ${(settings?.warningSystem?.warningExpiry || 604800) / 86400} days
+2. User gets warned (1/${warn.maxWarnings || 3})
+3. After ${warn.maxWarnings || 3} warnings → ${warn.actionOnMax || 'banned'}
+4. Warnings expire after ${expiry}
 
 *Commands:*
 \`/warn\` - Warn user (reply)
@@ -338,7 +389,7 @@ Prevent spammers who join multiple groups quickly to advertise.
     const keyboard = {
       inline_keyboard: [
         [
-          { text: settings?.warningSystem?.enabled ? "❌ Disable" : "✅ Enable", 
+          { text: warn.enabled ? "❌ Disable" : "✅ Enable", 
             callback_data: "toggle_warnings" }
         ],
         [
@@ -351,21 +402,24 @@ Prevent spammers who join multiple groups quickly to advertise.
   }
 
   // ============================================
-  // AUTO-DELETE UI
+  // AUTO-DELETE
   // ============================================
-  static getAutoDeleteUI(settings: any): UIComponent {
+  private static getAutoDeleteUI(settings: any): UIComponent {
+    const del = settings?.autoDelete || {};
+    const duration = BotHelpers.formatDuration(del.deleteAfter || 86400);
+    
     const message = `
 🗑️ *Auto-Delete Messages*
 
-*Status:* ${settings?.autoDelete?.enabled ? 'Enabled ✅' : 'Disabled ❌'}
+*Status:* ${del.enabled ? '✅ Enabled' : '❌ Disabled'}
 
 *Configuration:*
-• Delete After: ${(settings?.autoDelete?.deleteAfter || 86400) / 3600} hours
-• Exclude Admins: ${settings?.autoDelete?.excludeAdmins ? 'Yes ✅' : 'No ❌'}
-• Specific Users: ${settings?.autoDelete?.specificUsers?.length || 0} users
+• Delete After: ${duration}
+• Exclude Admins: ${del.excludeAdmins ? 'Yes ✅' : 'No ❌'}
+• Specific Users: ${del.specificUsers?.length || 0} users
 
 *How it Works:*
-Messages are automatically deleted after ${(settings?.autoDelete?.deleteAfter || 86400) / 3600} hours.
+Messages are automatically deleted after ${duration}.
 
 *Use Case:*
 Keep group clean by auto-deleting old messages.
@@ -382,7 +436,7 @@ Keep group clean by auto-deleting old messages.
     const keyboard = {
       inline_keyboard: [
         [
-          { text: settings?.autoDelete?.enabled ? "❌ Disable" : "✅ Enable", 
+          { text: del.enabled ? "❌ Disable" : "✅ Enable", 
             callback_data: "toggle_autodelete" }
         ],
         [
@@ -395,19 +449,21 @@ Keep group clean by auto-deleting old messages.
   }
 
   // ============================================
-  // REPORTS UI
+  // REPORTS
   // ============================================
-  static getReportsUI(settings: any): UIComponent {
+  private static getReportsUI(settings: any): UIComponent {
+    const rep = settings?.reportSettings || {};
+    
     const message = `
 📢 *Report System*
 
-*Status:* ${settings?.reportSettings?.enabled ? 'Enabled ✅' : 'Disabled ❌'}
+*Status:* ${rep.enabled ? '✅ Enabled' : '❌ Disabled'}
 
 *Configuration:*
-• Report Channel: ${settings?.reportSettings?.reportChannel || 'Not set'}
-• Auto Report Spam: ${settings?.reportSettings?.autoReportSpam ? 'Yes ✅' : 'No ❌'}
-• Auto Report Banned Words: ${settings?.reportSettings?.autoReportBannedWords ? 'Yes ✅' : 'No ❌'}
-• Notify Admins: ${settings?.reportSettings?.notifyAdmins ? 'Yes ✅' : 'No ❌'}
+• Report Channel: ${rep.reportChannel || 'Not set'}
+• Auto Report Spam: ${rep.autoReportSpam ? 'Yes ✅' : 'No ❌'}
+• Auto Report Banned Words: ${rep.autoReportBannedWords ? 'Yes ✅' : 'No ❌'}
+• Notify Admins: ${rep.notifyAdmins ? 'Yes ✅' : 'No ❌'}
 
 *How it Works:*
 1. Auto-mod detects violation
@@ -435,7 +491,7 @@ Keep group clean by auto-deleting old messages.
     const keyboard = {
       inline_keyboard: [
         [
-          { text: settings?.reportSettings?.enabled ? "❌ Disable" : "✅ Enable", 
+          { text: rep.enabled ? "❌ Disable" : "✅ Enable", 
             callback_data: "toggle_reports" }
         ],
         [
@@ -448,25 +504,29 @@ Keep group clean by auto-deleting old messages.
   }
 
   // ============================================
-  // NEW USERS UI
+  // NEW USERS
   // ============================================
-  static getNewUsersUI(settings: any): UIComponent {
+  private static getNewUsersUI(settings: any): UIComponent {
+    const newUser = settings?.newUserRestrictions || {};
+    const duration = BotHelpers.formatDuration(newUser.restrictDuration || 3600);
+    const icon = (enabled: boolean) => enabled ? '✅' : '❌';
+    
     const message = `
 🆕 *New User Restrictions*
 
-*Status:* ${settings?.newUserRestrictions?.enabled ? 'Enabled ✅' : 'Disabled ❌'}
+*Status:* ${newUser.enabled ? '✅ Enabled' : '❌ Disabled'}
 
 *Configuration:*
-• Restrict Duration: ${(settings?.newUserRestrictions?.restrictDuration || 3600) / 60} minutes
+• Restrict Duration: ${duration}
 
 *Permissions for New Users:*
-${settings?.newUserRestrictions?.canSendMessages ? '✅' : '❌'} Send Messages
-${settings?.newUserRestrictions?.canSendMedia ? '✅' : '❌'} Send Media
-${settings?.newUserRestrictions?.canSendStickers ? '✅' : '❌'} Send Stickers
-${settings?.newUserRestrictions?.canSendPolls ? '✅' : '❌'} Send Polls
+${icon(newUser.canSendMessages)} Send Messages
+${icon(newUser.canSendMedia)} Send Media
+${icon(newUser.canSendStickers)} Send Stickers
+${icon(newUser.canSendPolls)} Send Polls
 
 *How it Works:*
-When user joins, they are restricted for ${(settings?.newUserRestrictions?.restrictDuration || 3600) / 60} minutes with limited permissions.
+When user joins, they are restricted for ${duration} with limited permissions.
 
 *Use Case:*
 Prevent new users from immediately spamming.
@@ -480,16 +540,8 @@ Prevent new users from immediately spamming.
     const keyboard = {
       inline_keyboard: [
         [
-          { text: settings?.newUserRestrictions?.enabled ? "❌ Disable" : "✅ Enable", 
-            callback_data: "toggle_newusers" },
-          { text: `${settings?.newUserRestrictions?.canSendMessages ? '❌' : '✅'} Messages`,
-            callback_data: "toggle_newuser_messages" }
-        ],
-        [
-          { text: `${settings?.newUserRestrictions?.canSendMedia ? '❌' : '✅'} Media`,
-            callback_data: "toggle_newuser_media" },
-          { text: `${settings?.newUserRestrictions?.canSendStickers ? '❌' : '✅'} Stickers`,
-            callback_data: "toggle_newuser_stickers" }
+          { text: newUser.enabled ? "❌ Disable" : "✅ Enable", 
+            callback_data: "toggle_newusers" }
         ],
         [
           { text: "🔙 Back to Auto-Mod", callback_data: "back_automod" }
@@ -499,56 +551,4 @@ Prevent new users from immediately spamming.
 
     return { message, keyboard };
   }
-
-  static async updateUI(ctx: any, settings: any, section: string) {
-    try {
-      const component = await this.getComponent(settings, section);
-      await ctx.editMessageText(component.message, {
-        parse_mode: "Markdown",
-        reply_markup: component.keyboard,
-        chat_id: ctx.chat?.id,
-        message_id: ctx.callbackQuery?.message?.message_id
-      });
-    } catch (error) {
-      console.error('UI Update Error:', error);
-      await ctx.answerCbQuery('Error updating UI');
-    }
-  }
-
-  static async getComponent(settings: any, section: string): Promise<UIComponent> {
-    let ui: UIComponent;
-    switch (section) {
-      case 'automod_words':
-        ui = this.getBannedWordsUI(settings);
-        break;
-      case 'automod_spam':
-        ui = this.getAntiSpamUI(settings);
-        break;
-      case 'automod_flood':
-        ui = this.getAntiFloodUI(settings);
-        break;
-      case 'automod_media':
-        ui = this.getMediaFilterUI(settings);
-        break;
-      case 'automod_multijoin':
-        ui = this.getMultiJoinUI(settings);
-        break;
-      case 'automod_warnings':
-        ui = this.getWarningSystemUI(settings);
-        break;
-      case 'automod_autodelete':
-        ui = this.getAutoDeleteUI(settings);
-        break;
-      case 'automod_reports':
-        ui = this.getReportsUI(settings);
-        break;
-      case 'automod_newusers':
-        ui = this.getNewUsersUI(settings);
-        break;
-      case 'back_automod':
-      default:
-        ui = this.getDashboardUI(settings, '');
-    }
-    return ui;
-    }
-  }
+}

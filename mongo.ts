@@ -1,202 +1,96 @@
+// ============================================
+// OPTIMIZED DATABASE SCHEMAS
+// mongo.ts
+// ============================================
+
+import mongoose, { Schema, Model } from "mongoose";
 
 // ============================================
-// DATABASE SCHEMAS FOR AUTO-MODERATION
+// INTERFACES
 // ============================================
 
-import mongoose from "mongoose";
-
-// Auto-Moderation Settings Schema
-const autoModSettingsSchema = new mongoose.Schema({
-  communityId: { type: String, required: true, unique: true },
-
-  // Banned Words Filter
+interface IAutoModSettings {
+  communityId: string;
   bannedWords: {
-    type: {
-      enabled: { type: Boolean, default: false },
-      words: [{ type: String, lowercase: true }],
-      action: {
-        type: String,
-        enum: ['delete', 'warn', 'mute', 'kick', 'ban'],
-        default: 'warn'
-      },
-      warningsBeforePunish: { type: Number, default: 3 }
-    },
-    required: true
-  },
-
-  // Anti-Spam Settings
+    enabled: boolean;
+    words: string[];
+    action: 'delete' | 'warn' | 'mute' | 'kick' | 'ban';
+    warningsBeforePunish: number;
+  };
   antiSpam: {
-    type: {
-      enabled: { type: Boolean, default: true },
-      maxMessages: { type: Number, default: 5 },
-      timeWindow: { type: Number, default: 10 }, // seconds
-      action: {
-        type: String,
-        enum: ['warn', 'mute', 'kick', 'ban'],
-        default: 'mute'
-      },
-      muteDuration: { type: Number, default: 3600 } // seconds
-    },
-    required: true
-  },
-
-  // Anti-Flood (same message repeated)
+    enabled: boolean;
+    maxMessages: number;
+    timeWindow: number;
+    action: 'warn' | 'mute' | 'kick' | 'ban';
+    muteDuration: number;
+  };
   antiFlood: {
-    type: {
-      enabled: { type: Boolean, default: true },
-      maxRepeats: { type: Number, default: 3 },
-      action: { type: String, default: 'mute' }
-    },
-    required: true
-  },
-
-  // Media Restrictions
+    enabled: boolean;
+    maxRepeats: number;
+    action: string;
+  };
   mediaRestrictions: {
-    type: {
-      enabled: { type: Boolean, default: false },
-      blockPhotos: { type: Boolean, default: false },
-      blockVideos: { type: Boolean, default: false },
-      blockStickers: { type: Boolean, default: false },
-      blockGifs: { type: Boolean, default: false },
-      blockDocuments: { type: Boolean, default: false },
-      blockLinks: { type: Boolean, default: false },
-      action: { type: String, default: 'delete' }
-    },
-    required: true
-  },
-
-  // Multi-Group Join Detection
+    enabled: boolean;
+    blockPhotos: boolean;
+    blockVideos: boolean;
+    blockStickers: boolean;
+    blockGifs: boolean;
+    blockDocuments: boolean;
+    blockLinks: boolean;
+    action: string;
+  };
   multiJoinDetection: {
-    type: {
-      enabled: { type: Boolean, default: true },
-      maxGroupsInTime: { type: Number, default: 5 },
-      timeWindow: { type: Number, default: 3600 }, // 1 hour
-      action: {
-        type: String,
-        enum: ['warn', 'kick', 'ban', 'report'],
-        default: 'report'
-      },
-      autoReport: { type: Boolean, default: true }
-    },
-    required: true
-  },
-
-  // Warning System
+    enabled: boolean;
+    maxGroupsInTime: number;
+    timeWindow: number;
+    action: 'warn' | 'kick' | 'ban' | 'report';
+    autoReport: boolean;
+  };
   warningSystem: {
-    type: {
-      enabled: { type: Boolean, default: true },
-      maxWarnings: { type: Number, default: 3 },
-      warningExpiry: { type: Number, default: 86400 * 7 }, // 7 days
-      actionOnMax: {
-        type: String,
-        enum: ['mute', 'kick', 'ban'],
-        default: 'ban'
-      }
-    },
-    required: true
-  },
-
-  // Auto-Delete Settings
+    enabled: boolean;
+    maxWarnings: number;
+    warningExpiry: number;
+    actionOnMax: 'mute' | 'kick' | 'ban';
+  };
   autoDelete: {
-    type: {
-      enabled: { type: Boolean, default: false },
-      deleteAfter: { type: Number, default: 86400 }, // 24 hours
-      excludeAdmins: { type: Boolean, default: true },
-      specificUsers: [Number] // User IDs to target
-    },
-    required: true
-  },
-
-  // Report Settings
+    enabled: boolean;
+    deleteAfter: number;
+    excludeAdmins: boolean;
+    specificUsers: number[];
+  };
   reportSettings: {
-    type: {
-      enabled: { type: Boolean, default: true },
-      reportChannel: { type: String, default: "" }, // Channel ID for reports
-      autoReportSpam: { type: Boolean, default: true },
-      autoReportBannedWords: { type: Boolean, default: true },
-      notifyAdmins: { type: Boolean, default: true }
-    },
-    required: true
-  },
-
-  // New User Restrictions
+    enabled: boolean;
+    reportChannel: string;
+    autoReportSpam: boolean;
+    autoReportBannedWords: boolean;
+    notifyAdmins: boolean;
+  };
   newUserRestrictions: {
-    type: {
-      enabled: { type: Boolean, default: false },
-      restrictDuration: { type: Number, default: 3600 }, // 1 hour
-      canSendMessages: { type: Boolean, default: true },
-      canSendMedia: { type: Boolean, default: false },
-      canSendStickers: { type: Boolean, default: false },
-      canSendPolls: { type: Boolean, default: false }
-    },
-    required: true
-  }
-});
+    enabled: boolean;
+    restrictDuration: number;
+    canSendMessages: boolean;
+    canSendMedia: boolean;
+    canSendStickers: boolean;
+    canSendPolls: boolean;
+  };
+}
 
-// User Warnings Schema
-const userWarningSchema = new mongoose.Schema({
-  communityId: { type: String, required: true },
-  userId: { type: Number, required: true },
-  userName: { type: String, default: "" },
-  warnings: [{
-    reason: String,
-    timestamp: { type: Date, default: Date.now },
-    issuedBy: Number,
-    groupId: Number
-  }],
-  totalWarnings: { type: Number, default: 0 },
-  lastWarning: { type: Date, default: null }
-});
-
-// Message Tracker (for spam/flood detection)
-const messageTrackerSchema = new mongoose.Schema({
-  userId: { type: Number, required: true },
-  chatId: { type: Number, required: true },
-  communityId: { type: String, required: true },
-  messages: [{
-    text: String,
-    timestamp: { type: Date, default: Date.now },
-    messageId: Number
-  }],
-  lastCleanup: { type: Date, default: Date.now }
-});
-
-// Multi-Join Tracker
-const multiJoinTrackerSchema = new mongoose.Schema({
-  userId: { type: Number, required: true },
-  communityId: { type: String, required: true },
-  joins: [{
-    groupId: Number,
-    groupName: String,
-    timestamp: { type: Date, default: Date.now }
-  }],
-  isReported: { type: Boolean, default: false },
-  isSuspicious: { type: Boolean, default: false }
-});
-
-// Auto-Delete Queue
-const autoDeleteQueueSchema = new mongoose.Schema({
-  communityId: { type: String, required: true },
-  chatId: { type: Number, required: true },
-  messageId: { type: Number, required: true },
-  userId: { type: Number, required: true },
-  deleteAt: { type: Date, required: true },
-  processed: { type: Boolean, default: false }
-});
-
+// ============================================
+// DEFAULT SETTINGS
+// ============================================
 
 const defaultSettings = {
   bannedWords: {
     enabled: false,
     words: [],
-    action: 'warn',
+    action: 'warn' as const,
     warningsBeforePunish: 3
   },
   antiSpam: {
     enabled: true,
     maxMessages: 5,
     timeWindow: 10,
-    action: 'mute',
+    action: 'mute' as const,
     muteDuration: 3600
   },
   antiFlood: {
@@ -218,14 +112,14 @@ const defaultSettings = {
     enabled: true,
     maxGroupsInTime: 5,
     timeWindow: 3600,
-    action: 'report',
+    action: 'report' as const,
     autoReport: true
   },
   warningSystem: {
     enabled: true,
     maxWarnings: 3,
     warningExpiry: 86400 * 7,
-    actionOnMax: 'ban'
+    actionOnMax: 'ban' as const
   },
   autoDelete: {
     enabled: false,
@@ -250,38 +144,145 @@ const defaultSettings = {
   }
 };
 
-const AutoModSettings = mongoose.model('AutoModSettings', autoModSettingsSchema);
-
-AutoModSettings.schema.path('bannedWords').default(() => defaultSettings.bannedWords);
-AutoModSettings.schema.path('antiSpam').default(() => defaultSettings.antiSpam);
-AutoModSettings.schema.path('antiFlood').default(() => defaultSettings.antiFlood);
-AutoModSettings.schema.path('mediaRestrictions').default(() => defaultSettings.mediaRestrictions);
-AutoModSettings.schema.path('multiJoinDetection').default(() => defaultSettings.multiJoinDetection);
-AutoModSettings.schema.path('warningSystem').default(() => defaultSettings.warningSystem);
-AutoModSettings.schema.path('autoDelete').default(() => defaultSettings.autoDelete);
-AutoModSettings.schema.path('reportSettings').default(() => defaultSettings.reportSettings);
-AutoModSettings.schema.path('newUserRestrictions').default(() => defaultSettings.newUserRestrictions);
-
-export { AutoModSettings };
-export const UserWarning = mongoose.model('UserWarning', userWarningSchema);
-export const MessageTracker = mongoose.model('MessageTracker', messageTrackerSchema);
-export const MultiJoinTracker = mongoose.model('MultiJoinTracker', multiJoinTrackerSchema);
-export const AutoDeleteQueue = mongoose.model('AutoDeleteQueue', autoDeleteQueueSchema);
-
-
-
 // ============================================
-// DATABASE SCHEMAS
+// SCHEMAS
 // ============================================
 
-// Community Schema
-const communitySchema = new mongoose.Schema({
-  communityId: { type: String, required: true, unique: true },
-  ownerId: { type: Number, required: true },
+const autoModSettingsSchema = new Schema<IAutoModSettings>({
+  communityId: { type: String, required: true, unique: true, index: true },
+  bannedWords: {
+    enabled: { type: Boolean, default: defaultSettings.bannedWords.enabled },
+    words: [{ type: String, lowercase: true }],
+    action: {
+      type: String,
+      enum: ['delete', 'warn', 'mute', 'kick', 'ban'],
+      default: defaultSettings.bannedWords.action
+    },
+    warningsBeforePunish: { type: Number, default: defaultSettings.bannedWords.warningsBeforePunish }
+  },
+  antiSpam: {
+    enabled: { type: Boolean, default: defaultSettings.antiSpam.enabled },
+    maxMessages: { type: Number, default: defaultSettings.antiSpam.maxMessages },
+    timeWindow: { type: Number, default: defaultSettings.antiSpam.timeWindow },
+    action: {
+      type: String,
+      enum: ['warn', 'mute', 'kick', 'ban'],
+      default: defaultSettings.antiSpam.action
+    },
+    muteDuration: { type: Number, default: defaultSettings.antiSpam.muteDuration }
+  },
+  antiFlood: {
+    enabled: { type: Boolean, default: defaultSettings.antiFlood.enabled },
+    maxRepeats: { type: Number, default: defaultSettings.antiFlood.maxRepeats },
+    action: { type: String, default: defaultSettings.antiFlood.action }
+  },
+  mediaRestrictions: {
+    enabled: { type: Boolean, default: defaultSettings.mediaRestrictions.enabled },
+    blockPhotos: { type: Boolean, default: defaultSettings.mediaRestrictions.blockPhotos },
+    blockVideos: { type: Boolean, default: defaultSettings.mediaRestrictions.blockVideos },
+    blockStickers: { type: Boolean, default: defaultSettings.mediaRestrictions.blockStickers },
+    blockGifs: { type: Boolean, default: defaultSettings.mediaRestrictions.blockGifs },
+    blockDocuments: { type: Boolean, default: defaultSettings.mediaRestrictions.blockDocuments },
+    blockLinks: { type: Boolean, default: defaultSettings.mediaRestrictions.blockLinks },
+    action: { type: String, default: defaultSettings.mediaRestrictions.action }
+  },
+  multiJoinDetection: {
+    enabled: { type: Boolean, default: defaultSettings.multiJoinDetection.enabled },
+    maxGroupsInTime: { type: Number, default: defaultSettings.multiJoinDetection.maxGroupsInTime },
+    timeWindow: { type: Number, default: defaultSettings.multiJoinDetection.timeWindow },
+    action: {
+      type: String,
+      enum: ['warn', 'kick', 'ban', 'report'],
+      default: defaultSettings.multiJoinDetection.action
+    },
+    autoReport: { type: Boolean, default: defaultSettings.multiJoinDetection.autoReport }
+  },
+  warningSystem: {
+    enabled: { type: Boolean, default: defaultSettings.warningSystem.enabled },
+    maxWarnings: { type: Number, default: defaultSettings.warningSystem.maxWarnings },
+    warningExpiry: { type: Number, default: defaultSettings.warningSystem.warningExpiry },
+    actionOnMax: {
+      type: String,
+      enum: ['mute', 'kick', 'ban'],
+      default: defaultSettings.warningSystem.actionOnMax
+    }
+  },
+  autoDelete: {
+    enabled: { type: Boolean, default: defaultSettings.autoDelete.enabled },
+    deleteAfter: { type: Number, default: defaultSettings.autoDelete.deleteAfter },
+    excludeAdmins: { type: Boolean, default: defaultSettings.autoDelete.excludeAdmins },
+    specificUsers: [Number]
+  },
+  reportSettings: {
+    enabled: { type: Boolean, default: defaultSettings.reportSettings.enabled },
+    reportChannel: { type: String, default: defaultSettings.reportSettings.reportChannel },
+    autoReportSpam: { type: Boolean, default: defaultSettings.reportSettings.autoReportSpam },
+    autoReportBannedWords: { type: Boolean, default: defaultSettings.reportSettings.autoReportBannedWords },
+    notifyAdmins: { type: Boolean, default: defaultSettings.reportSettings.notifyAdmins }
+  },
+  newUserRestrictions: {
+    enabled: { type: Boolean, default: defaultSettings.newUserRestrictions.enabled },
+    restrictDuration: { type: Number, default: defaultSettings.newUserRestrictions.restrictDuration },
+    canSendMessages: { type: Boolean, default: defaultSettings.newUserRestrictions.canSendMessages },
+    canSendMedia: { type: Boolean, default: defaultSettings.newUserRestrictions.canSendMedia },
+    canSendStickers: { type: Boolean, default: defaultSettings.newUserRestrictions.canSendStickers },
+    canSendPolls: { type: Boolean, default: defaultSettings.newUserRestrictions.canSendPolls }
+  }
+}, { timestamps: true });
+
+const userWarningSchema = new Schema({
+  communityId: { type: String, required: true, index: true },
+  userId: { type: Number, required: true, index: true },
+  userName: { type: String, default: "" },
+  warnings: [{
+    reason: String,
+    timestamp: { type: Date, default: Date.now },
+    issuedBy: Number,
+    groupId: Number
+  }],
+  totalWarnings: { type: Number, default: 0 },
+  lastWarning: { type: Date, default: null }
+}, { timestamps: true });
+
+const messageTrackerSchema = new Schema({
+  userId: { type: Number, required: true, index: true },
+  chatId: { type: Number, required: true, index: true },
+  communityId: { type: String, required: true, index: true },
+  messages: [{
+    text: String,
+    timestamp: { type: Date, default: Date.now },
+    messageId: Number
+  }],
+  lastCleanup: { type: Date, default: Date.now }
+}, { timestamps: true });
+
+const multiJoinTrackerSchema = new Schema({
+  userId: { type: Number, required: true, index: true },
+  communityId: { type: String, required: true, index: true },
+  joins: [{
+    groupId: Number,
+    groupName: String,
+    timestamp: { type: Date, default: Date.now }
+  }],
+  isReported: { type: Boolean, default: false },
+  isSuspicious: { type: Boolean, default: false }
+}, { timestamps: true });
+
+const autoDeleteQueueSchema = new Schema({
+  communityId: { type: String, required: true, index: true },
+  chatId: { type: Number, required: true },
+  messageId: { type: Number, required: true },
+  userId: { type: Number, required: true },
+  deleteAt: { type: Date, required: true, index: true },
+  processed: { type: Boolean, default: false, index: true }
+}, { timestamps: true });
+
+const communitySchema = new Schema({
+  communityId: { type: String, required: true, unique: true, index: true },
+  ownerId: { type: Number, required: true, index: true },
   ownerName: { type: String, required: true },
   communityName: { type: String, required: true },
   description: { type: String, default: "" },
-  createdAt: { type: Date, default: Date.now },
   settings: {
     allowAutoModeration: { type: Boolean, default: true },
     logChannel: { type: String, default: "" },
@@ -306,46 +307,61 @@ const communitySchema = new mongoose.Schema({
     totalBans: { type: Number, default: 0 },
     totalMessages: { type: Number, default: 0 }
   }
-});
+}, { timestamps: true });
 
-// Group Schema (linked to communities)
-const groupSchema = new mongoose.Schema({
-  chatId: { type: Number, required: true },
-  communityId: { type: String, required: true },
+const groupSchema = new Schema({
+  chatId: { type: Number, required: true, index: true },
+  communityId: { type: String, required: true, index: true },
   username: { type: String, default: "" },
   groupName: { type: String, required: true },
   addedBy: { type: Number, required: true },
   addedAt: { type: Date, default: Date.now },
-  isActive: { type: Boolean, default: true },
+  isActive: { type: Boolean, default: true, index: true },
   settings: {
     antiSpam: { type: Boolean, default: true },
     antiFlood: { type: Boolean, default: true },
     welcomeEnabled: { type: Boolean, default: false },
     rulesEnabled: { type: Boolean, default: false }
   }
-});
+}, { timestamps: true });
 
-// Global Ban List (per community)
-const globalBanSchema = new mongoose.Schema({
-  communityId: { type: String, required: true },
-  userId: { type: Number, required: true },
+const globalBanSchema = new Schema({
+  communityId: { type: String, required: true, index: true },
+  userId: { type: Number, required: true, index: true },
   userName: { type: String, default: "" },
   reason: { type: String, default: "" },
   bannedBy: { type: Number, required: true },
   bannedAt: { type: Date, default: Date.now },
-  isActive: { type: Boolean, default: true }
-});
+  isActive: { type: Boolean, default: true, index: true }
+}, { timestamps: true });
 
-// User-Community Mapping
-const userCommunitySchema = new mongoose.Schema({
-  userId: { type: Number, required: true },
+const userCommunitySchema = new Schema({
+  userId: { type: Number, required: true, unique: true, index: true },
   activeCommunity: { type: String, default: null },
   communities: [String]
-});
+}, { timestamps: true });
 
-const Community = mongoose.model('Community', communitySchema);
-const Group = mongoose.model('Group', groupSchema);
-const GlobalBan = mongoose.model('GlobalBan', globalBanSchema);
-const UserCommunity = mongoose.model('UserCommunity', userCommunitySchema);
+// ============================================
+// INDEXES
+// ============================================
 
-export { Community, Group, GlobalBan, UserCommunity };
+userWarningSchema.index({ communityId: 1, userId: 1 });
+messageTrackerSchema.index({ userId: 1, chatId: 1, communityId: 1 });
+multiJoinTrackerSchema.index({ userId: 1, communityId: 1 });
+autoDeleteQueueSchema.index({ deleteAt: 1, processed: 1 });
+groupSchema.index({ communityId: 1, isActive: 1 });
+globalBanSchema.index({ communityId: 1, isActive: 1 });
+
+// ============================================
+// MODELS
+// ============================================
+
+export const AutoModSettings = mongoose.model<IAutoModSettings>('AutoModSettings', autoModSettingsSchema);
+export const UserWarning = mongoose.model('UserWarning', userWarningSchema);
+export const MessageTracker = mongoose.model('MessageTracker', messageTrackerSchema);
+export const MultiJoinTracker = mongoose.model('MultiJoinTracker', multiJoinTrackerSchema);
+export const AutoDeleteQueue = mongoose.model('AutoDeleteQueue', autoDeleteQueueSchema);
+export const Community = mongoose.model('Community', communitySchema);
+export const Group = mongoose.model('Group', groupSchema);
+export const GlobalBan = mongoose.model('GlobalBan', globalBanSchema);
+export const UserCommunity = mongoose.model('UserCommunity', userCommunitySchema);

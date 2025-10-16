@@ -1,79 +1,134 @@
 // ============================================
-// UPDATED MAIN INDEX FILE
+// OPTIMIZED MAIN INDEX
 // index.ts
 // ============================================
-
 
 import { Telegraf } from "telegraf";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
 import { initializeMultiCommunityBot } from "./functions/bot/multi_community";
-// import { DashboardCallbacks } from "./functions/bot/utility_commands";
 import { UtilityPart1 } from "./functions/bot/utility_commands_part1";
 import { UtilityPart2 } from "./functions/bot/utility_commands_part2";
 import { AutoModerationSystem } from "./functions/bot/auto_moderation";
 import { AutoModUI } from "./functions/bot/auto_moderation_ui";
+import { MessageCleanupService } from "./functions/services/messageCleanup";
+import { MessageManagerUI } from './functions/bot/message_manager_ui';
+
+// Load environment variables
 dotenv.config();
 
+// Validate environment variables
+if (!process.env.BOT_TOKEN) {
+  console.error("❌ BOT_TOKEN is required");
+  process.exit(1);
+}
 
-const bot = new Telegraf(process.env.BOT_TOKEN!);
-mongoose.connect(process.env.MONGODB_URI!).then(() => {
-new AutoModerationSystem(bot);
-AutoModUI.initialize(bot);
-UtilityPart1.initialize(bot);
-UtilityPart2.initialize(bot);
-initializeMultiCommunityBot(bot);
-// UtilityCommands.initialize(bot);
-  console.log("Connected to MongoDB");
-}).catch(err => {
-  console.error("Failed to connect to MongoDB", err);
+if (!process.env.MONGODB_URI) {
+  console.error("❌ MONGODB_URI is required");
+  process.exit(1);
+}
+
+// Initialize bot
+const bot = new Telegraf(process.env.BOT_TOKEN);
+
+// MongoDB connection with better error handling
+mongoose.connect(process.env.MONGODB_URI)
+  .then(async () => {
+    console.log("✅ Connected to MongoDB");
+
+    // Initialize bot modules
+    console.log("🚀 Initializing bot modules...");
+
+    try {
+      // Initialize in order of dependency
+      new AutoModerationSystem(bot);
+      console.log("✅ Auto-Moderation System initialized");
+
+      AutoModUI.initialize(bot);
+      console.log("✅ Auto-Mod UI initialized");
+
+      UtilityPart1.initialize(bot);
+      console.log("✅ Utility Commands Part 1 initialized");
+
+      UtilityPart2.initialize(bot);
+      console.log("✅ Utility Commands Part 2 initialized");
+
+      await initializeMultiCommunityBot(bot);
+      console.log("✅ Multi-Community System initialized");
+
+      const cleanupService = new MessageCleanupService(bot);
+      cleanupService.start();
+
+      // In your bot initialization
+      MessageManagerUI.initialize(bot);
+
+      console.log("🎉 All modules loaded successfully");
+    } catch (error) {
+      console.error("❌ Error initializing modules:", error);
+      process.exit(1);
+    }
+  })
+  .catch(err => {
+    console.error("❌ MongoDB connection failed:", err);
+    process.exit(1);
+  });
+
+// MongoDB connection events
+mongoose.connection.on('error', err => {
+  console.error('MongoDB error:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+  console.warn('⚠️ MongoDB disconnected');
+});
+
+mongoose.connection.on('reconnected', () => {
+  console.log('✅ MongoDB reconnected');
+});
+
+// Error handlers
+bot.catch((err: any, ctx: any) => {
+  console.error('Bot error:', err);
+  ctx.reply('❌ An error occurred. Please try again.').catch(() => { });
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
   process.exit(1);
 });
-// Initialize
 
+// Graceful shutdown
+process.once('SIGINT', () => {
+  console.log('\n🛑 SIGINT received. Shutting down gracefully...');
+  bot.stop('SIGINT');
+  mongoose.connection.close().then(() => {
+    console.log('✅ MongoDB connection closed');
+    process.exit(0);
+  });
+});
 
-bot.launch();
+process.once('SIGTERM', () => {
+  console.log('\n🛑 SIGTERM received. Shutting down gracefully...');
+  bot.stop('SIGTERM');
+  mongoose.connection.close().then(() => {
+    console.log('✅ MongoDB connection closed');
+    process.exit(0);
+  });
+});
 
-// ============================================
-// ADMIN PERMISSION MANAGEMENT
-// ============================================
+// Launch bot
+bot.launch()
+  .then(() => {
+    console.log('🤖 Bot started successfully!');
+    console.log(`📅 ${new Date().toLocaleString()}`);
+  })
+  .catch(err => {
+    console.error('❌ Failed to start bot:', err);
+    process.exit(1);
+  });
 
-// export class PermissionManager {
-//   static async setPermission(
-//     communityId: string,
-//     adminId: number,
-//     permission: string,
-//     value: boolean
-//   ) {
-//     const community = await Community.findOne({ communityId });
-//     if (!community) throw new Error("Community not found");
-
-//     const admin = community.admins.find((a: any) => a.userId === adminId);
-//     if (!admin) throw new Error("Admin not found");
-
-//     admin.permissions[permission] = value;
-//     await community.save();
-    
-//     return true;
-//   }
-
-//   static async getPermissions(communityId: string, userId: number) {
-//     const community = await Community.findOne({ communityId });
-//     if (!community) return null;
-
-//     if (community.ownerId === userId) {
-//       return {
-//         isOwner: true,
-//         canAddGroups: true,
-//         canRemoveGroups: true,
-//         canBan: true,
-//         canMute: true,
-//         canBroadcast: true,
-//         canManageAdmins: true
-//       };
-//     }
-
-//     const admin = community.admins.find((a: any) => a.userId === userId);
-//     return admin ? { isOwner: false, ...admin.permissions } : null;
-//   }
-// }
+export { bot };
