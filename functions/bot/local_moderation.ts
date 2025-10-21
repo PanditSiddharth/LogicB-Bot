@@ -18,7 +18,7 @@ export class LocalModeration {
   private bot: Telegraf;
 
   constructor(bot: Telegraf) {
-  
+
     this.bot = bot;
     this.initialize();
   }
@@ -39,13 +39,13 @@ export class LocalModeration {
     // Ban user
     this.bot.command("ban", async (ctx: Context) => {
       try {
-        if (!await this.isGroupAdmin(ctx)) {
-          return send(ctx, "❌ Only admins can ban users!");
+        if (!await this.isGroupAdmin(ctx, "ban")) {
+          return send(ctx, "❌ Only admins can ban users with ban permission!");
         }
 
         const action = await this.parseModAction(ctx);
         if (!action.userId) {
-          return send(ctx, 
+          return send(ctx,
             "❌ *Usage:*\n\n" +
             "*Reply:* `/ban [reason]`\n" +
             "*ID:* `/ban 123456 [reason]`\n" +
@@ -58,14 +58,14 @@ export class LocalModeration {
           );
         }
 
-        const untilDate = action.duration 
+        const untilDate = action.duration
           ? Math.floor(Date.now() / 1000) + action.duration
           : 0; // 0 means permanent
 
         // Ban the user
         await ctx.banChatMember(action.userId, untilDate);
 
-        const message = 
+        const message =
           `🔨 *User Banned*\n\n` +
           `👤 User: ${action.userName}\n` +
           `🆔 ID: \`${action.userId}\`\n` +
@@ -87,7 +87,7 @@ export class LocalModeration {
 
         const action = await this.parseModAction(ctx);
         if (!action.userId) {
-          return send(ctx, 
+          return send(ctx,
             "❌ *Usage:*\n\n" +
             "*ID:* `/unban 123456`\n" +
             "*Reply:* `/unban` (reply to user's old message)\n\n" +
@@ -99,7 +99,7 @@ export class LocalModeration {
 
         await ctx.unbanChatMember(action.userId);
 
-        const message = 
+        const message =
           `✅ *User Unbanned*\n\n` +
           `👤 User: ${action.userName}\n` +
           `🆔 ID: \`${action.userId}\`\n` +
@@ -119,13 +119,13 @@ export class LocalModeration {
     // Mute user
     this.bot.command("mute", async (ctx: any) => {
       try {
-        if (!await this.isGroupAdmin(ctx)) {
-          return send(ctx, "❌ Only admins can mute users!");
+        if (!await this.isGroupAdmin(ctx, "mute")) {
+          return send(ctx, "❌ Only admins can mute users restrict user permission!");
         }
 
         const action = await this.parseModAction(ctx);
         if (!action.userId) {
-          return send(ctx, 
+          return send(ctx,
             "❌ *Usage:*\n\n" +
             "*Reply:* `/mute [time] [reason]`\n" +
             "*ID:* `/mute 123456 [time] [reason]`\n\n" +
@@ -144,7 +144,7 @@ export class LocalModeration {
           );
         }
 
-        const untilDate = action.duration 
+        const untilDate = action.duration
           ? Math.floor(Date.now() / 1000) + action.duration
           : 0; // 0 means permanent
 
@@ -162,11 +162,11 @@ export class LocalModeration {
           until_date: untilDate
         });
 
-        const durationText = action.duration 
+        const durationText = action.duration
           ? BotHelpers.formatDuration(action.duration)
           : "Permanent";
 
-        const message = 
+        const message =
           `🔇 *User Muted*\n\n` +
           `👤 User: ${action.userName}\n` +
           `🆔 ID: \`${action.userId}\`\n` +
@@ -189,7 +189,7 @@ export class LocalModeration {
 
         const action = await this.parseModAction(ctx);
         if (!action.userId) {
-          return send(ctx, 
+          return send(ctx,
             "❌ *Usage:*\n\n" +
             "*Reply:* `/unmute`\n" +
             "*ID:* `/unmute 123456`\n\n" +
@@ -212,7 +212,7 @@ export class LocalModeration {
           }
         });
 
-        const message = 
+        const message =
           `🔊 *User Unmuted*\n\n` +
           `👤 User: ${action.userName}\n` +
           `🆔 ID: \`${action.userId}\`\n` +
@@ -233,7 +233,7 @@ export class LocalModeration {
 
         const action = await this.parseModAction(ctx);
         if (!action.userId || !action.duration) {
-          return send(ctx, 
+          return send(ctx,
             "❌ *Usage:*\n\n" +
             "`/tmute <time> [reason]` (reply)\n" +
             "`/tmute 123456 <time> [reason]`\n\n" +
@@ -257,7 +257,7 @@ export class LocalModeration {
           until_date: untilDate
         });
 
-        const message = 
+        const message =
           `⏱️ *Temporary Mute*\n\n` +
           `👤 User: ${action.userName}\n` +
           `⏱️ Duration: ${BotHelpers.formatDuration(action.duration)}\n` +
@@ -283,7 +283,7 @@ export class LocalModeration {
 
         const action = await this.parseModAction(ctx);
         if (!action.userId) {
-          return send(ctx, 
+          return send(ctx,
             "❌ *Usage:*\n\n" +
             "*Reply:* `/kick [reason]`\n" +
             "*ID:* `/kick 123456 [reason]`\n" +
@@ -299,7 +299,7 @@ export class LocalModeration {
         await ctx.banChatMember(action.userId);
         await ctx.unbanChatMember(action.userId);
 
-        const message = 
+        const message =
           `👢 *User Kicked*\n\n` +
           `👤 User: ${action.userName}\n` +
           `🆔 ID: \`${action.userId}\`\n` +
@@ -321,12 +321,14 @@ export class LocalModeration {
     // Delete single message
     this.bot.command("del", async (ctx: any) => {
       try {
-        if (!await this.isGroupAdmin(ctx)) {
-          return send(ctx, "❌ Only admins can delete messages!");
+        if (!await this.isGroupAdmin(ctx, "delete")) {
+          return send(ctx, "❌ Only admins with delete Message permission can delete messages!"
+            , { type: "warnings"}
+          );
         }
 
         if (!ctx.message.reply_to_message) {
-          return send(ctx, "❌ Reply to a message to delete it!");
+          return send(ctx, "❌ Reply to a message to delete it!", { type: "warnings"});
         }
 
         await ctx.deleteMessage(ctx.message.reply_to_message.message_id);
@@ -344,7 +346,7 @@ export class LocalModeration {
         }
 
         if (!ctx.message.reply_to_message) {
-          return send(ctx, 
+          return send(ctx,
             "❌ *Usage:*\n\n" +
             "Reply to a message and use `/purge`\n" +
             "All messages from replied message to your command will be deleted.\n\n" +
@@ -386,7 +388,7 @@ export class LocalModeration {
 
         // Auto-delete status after 5s
         setTimeout(() => {
-          ctx.deleteMessage(statusMsg.message_id).catch(() => {});
+          ctx.deleteMessage(statusMsg.message_id).catch(() => { });
         }, 5000);
       } catch (error: any) {
         await send(ctx, `❌ Error: ${error.message}`);
@@ -401,13 +403,13 @@ export class LocalModeration {
     // Promote to admin
     this.bot.command("promote", async (ctx: any) => {
       try {
-        if (!await this.isGroupAdmin(ctx)) {
+        if (!await this.isGroupAdmin(ctx, "promote")) {
           return send(ctx, "❌ Only admins can promote users!");
         }
 
         const action = await this.parseModAction(ctx);
         if (!action.userId) {
-          return send(ctx, 
+          return send(ctx,
             "❌ *Usage:*\n\n" +
             "*Reply:* `/promote [title]`\n" +
             "*ID:* `/promote 123456 [title]`\n\n" +
@@ -432,10 +434,10 @@ export class LocalModeration {
         if (title.length <= 16) {
           try {
             await ctx.setChatAdministratorCustomTitle(action.userId, title);
-          } catch {}
+          } catch { }
         }
 
-        const message = 
+        const message =
           `⬆️ *User Promoted*\n\n` +
           `👤 User: ${action.userName}\n` +
           `🆔 ID: \`${action.userId}\`\n` +
@@ -451,13 +453,13 @@ export class LocalModeration {
     // Demote from admin
     this.bot.command("demote", async (ctx: any) => {
       try {
-        if (!await this.isGroupAdmin(ctx)) {
+        if (!await this.isGroupAdmin(ctx, "promote")) {
           return send(ctx, "❌ Only admins can demote users!");
         }
 
         const action = await this.parseModAction(ctx);
         if (!action.userId) {
-          return send(ctx, 
+          return send(ctx,
             "❌ *Usage:*\n\n" +
             "*Reply:* `/demote`\n" +
             "*ID:* `/demote 123456`",
@@ -476,7 +478,7 @@ export class LocalModeration {
           can_pin_messages: false
         });
 
-        const message = 
+        const message =
           `⬇️ *User Demoted*\n\n` +
           `👤 User: ${action.userName}\n` +
           `🆔 ID: \`${action.userId}\`\n` +
@@ -496,7 +498,7 @@ export class LocalModeration {
     this.bot.command("info", async (ctx: any) => {
       try {
         const action = await this.parseModAction(ctx);
-        
+
         let targetUser;
         if (action.userId) {
           targetUser = { id: action.userId };
@@ -540,7 +542,7 @@ ${user.username ? `🔗 *Username:* @${user.username}` : ''}
           message += `${restricted.can_send_messages ? '✅' : '❌'} Send Messages\n`;
           message += `${restricted.can_send_media_messages ? '✅' : '❌'} Send Media\n`;
           message += `${restricted.can_send_polls ? '✅' : '❌'} Send Polls\n`;
-          
+
           if (restricted.until_date) {
             const untilDate = new Date(restricted.until_date * 1000);
             message += `⏰ *Until:* ${untilDate.toLocaleString()}\n`;
@@ -558,10 +560,33 @@ ${user.username ? `🔗 *Username:* @${user.username}` : ''}
   // HELPER METHODS
   // ============================================
 
-  private async isGroupAdmin(ctx: any): Promise<boolean> {
+  private async isGroupAdmin(ctx: any, permission: "mute"| "ban" | "delete" | "promote" | "canAddGroups" | ""  = ""): Promise<boolean> {
     try {
       const member = await ctx.getChatMember(ctx.from.id);
-      return member.status === "creator" || member.status === "administrator";
+      if (member.status === "creator") return true;
+
+      if (member.status === "administrator") {
+        switch (permission) {
+          case "mute":
+            if (member.can_restrict_members) return true;
+            break;
+          case "ban":
+            if (member.can_restrict_members) return true;
+            break;
+          case "delete":
+            if (member.can_delete_messages) return true;
+            break;
+          case "promote":
+            if (member.can_promote_members) return true;
+            break;
+          case "canAddGroups":
+            if (member.can_invite_users) return true;
+            break;
+          default:
+            return true;
+        }
+      }
+      return false;
     } catch {
       return false;
     }
@@ -591,7 +616,7 @@ ${user.username ? `🔗 *Username:* @${user.username}` : ''}
       // Check for user ID
       if (/^\d{5,10}$/.test(firstArg)) {
         result.userId = parseInt(firstArg);
-        
+
         try {
           const member = await ctx.getChatMember(result.userId);
           result.userName = member.user.first_name;

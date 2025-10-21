@@ -349,6 +349,7 @@ If user joins ${mj.maxGroupsInTime || 5} groups within ${BotHelpers.formatDurati
 
     const actionButtons = [
       { text: `${mj.action === 'warn' ? '✅' : ''} Warn`, callback_data: 'set_action_multijoin_warn' },
+       { text: `${mj.action === 'mute' ? '✅' : ''} Mute`, callback_data: 'set_action_multijoin_mute' },
       { text: `${mj.action === 'kick' ? '✅' : ''} Kick`, callback_data: 'set_action_multijoin_kick' },
       { text: `${mj.action === 'ban' ? '✅' : ''} Ban`, callback_data: 'set_action_multijoin_ban' },
       { text: `${mj.action === 'report' ? '✅' : ''} Report`, callback_data: 'set_action_multijoin_report' }

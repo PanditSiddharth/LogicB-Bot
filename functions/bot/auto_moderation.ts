@@ -6,7 +6,7 @@
 
 import { Context, Telegraf } from "telegraf";
 import mongoose from "mongoose";
-import { AutoDeleteQueue, AutoModSettings, Community, Group, MessageTracker, MultiJoinTracker, UserCommunity, UserWarning } from "../../mongo"
+import { AutoDeleteQueue, AutoModSettings, Community, Group, MessageTracker, UserCommunity, UserWarning } from "../../mongo"
 import { BotHelpers } from "../utils/helpers";
 
 // ============================================
@@ -15,7 +15,6 @@ import { BotHelpers } from "../utils/helpers";
 const send = BotHelpers.send;
 export class AutoModerationSystem {
   private bot: Telegraf;
-  private spamCache = new Map<string, any>();
   
   constructor(bot: Telegraf) {
 
@@ -27,7 +26,6 @@ export class AutoModerationSystem {
         // Initialize default settings for new communities
     this.setupCommands();
     this.setupMessageHandlers();
-    this.setupJoinHandlers();
     this.startAutoDeleteWorker();
     this.startWarningCleanupWorker();
   }
@@ -1367,75 +1365,6 @@ Types: photos, videos, stickers, gifs, documents, links
   }
 
   // ============================================
-  // JOIN HANDLERS
-  // ============================================
-
-  private setupJoinHandlers() {
-    this.bot.on("new_chat_members", async (ctx: any) => {
-      try {
-        
-        const group = await Group.findOne({ chatId: ctx.chat.id, isActive: true });
-        if (!group) return;
-
-        const settings = await this.getSettings(group.communityId);
-
-        for (const newMember of ctx.message.new_chat_members) {
-          // Skip bots
-          if (newMember.is_bot) continue;
-
-          // Track multi-join
-          if (settings?.multiJoinDetection.enabled) {
-            await this.trackJoin(
-              newMember.id,
-              group.communityId,
-              ctx.chat.id,
-              ctx.chat.title
-            );
-
-            const isSuspicious = await this.checkMultiJoin(
-              newMember.id,
-              group.communityId,
-              settings?.multiJoinDetection
-            );
-
-            if (isSuspicious) {
-              await this.handleSuspiciousJoin(
-                ctx,
-                newMember,
-                group.communityId,
-                settings?.multiJoinDetection
-              );
-              continue;
-            }
-          }
-
-          // Apply new user restrictions
-          if (settings?.newUserRestrictions.enabled) {
-            await this.applyNewUserRestrictions(
-              ctx,
-              newMember.id,
-              settings?.newUserRestrictions
-            );
-          }
-
-          // Send welcome message (if configured)
-          
-          const community = await Community.findOne({ communityId: group.communityId });
-          if (community?.settings?.welcomeMessage) {
-            await send(ctx, 
-              community.settings?.welcomeMessage
-                .replace('{name}', newMember.first_name)
-                .replace('{group}', ctx.chat.title)
-            );
-          }
-        }
-      } catch (error) {
-        console.error("Error in new_chat_members handler:", error);
-      }
-    });
-  }
-
-  // ============================================
   // AUTO-DELETE WORKER
   // ============================================
 
@@ -1816,136 +1745,6 @@ Types: photos, videos, stickers, gifs, documents, links
   }
 
   // ============================================
-  // MULTI-JOIN DETECTION FUNCTIONS
-  // ============================================
-
-  private async trackJoin(
-    userId: number,
-    communityId: string,
-    groupId: number,
-    groupName: string
-  ) {
-    try {
-      let tracker = await MultiJoinTracker.findOne({ userId, communityId });
-
-      if (!tracker) {
-        tracker = new MultiJoinTracker({
-          userId,
-          communityId,
-          joins: []
-        });
-      }
-
-      tracker.joins.push({
-        groupId,
-        groupName,
-        timestamp: new Date()
-      });
-
-      await tracker.save();
-    } catch (error) {
-      console.error("Error tracking join:", error);
-    }
-  }
-
-  private async checkMultiJoin(
-    userId: number,
-    communityId: string,
-    multiJoinSettings: any
-  ): Promise<boolean> {
-    try {
-      const tracker = await MultiJoinTracker.findOne({ userId, communityId });
-      if (!tracker) return false;
-
-      const timeWindow = multiJoinSettings.timeWindow * 1000;
-      const now = Date.now();
-
-      const recentJoins = tracker.joins.filter(
-        join => now - join.timestamp.getTime() < timeWindow
-      );
-
-      if (recentJoins.length >= multiJoinSettings.maxGroupsInTime) {
-        tracker.isSuspicious = true;
-        await tracker.save();
-        return true;
-      }
-
-      return false;
-    } catch (error) {
-      return false;
-    }
-  }
-
-  private async handleSuspiciousJoin(
-    ctx: any,
-    newMember: any,
-    communityId: string,
-    multiJoinSettings: any
-  ) {
-    try {
-      const action = multiJoinSettings.action;
-
-      switch (action) {
-        case 'warn':
-          await send(ctx, 
-            `⚠️ ${newMember.first_name}, you've joined too many groups quickly. ` +
-            `This looks suspicious!`
-          );
-          break;
-
-        case 'kick':
-          await this.bot.telegram.kickChatMember(ctx.chat.id, newMember.id);
-          await this.bot.telegram.unbanChatMember(ctx.chat.id, newMember.id);
-          await send(ctx, 
-            `👢 ${newMember.first_name} was kicked for suspicious activity ` +
-            `(joined too many groups quickly).`
-          );
-          break;
-
-        case 'ban':
-          await this.bot.telegram.banChatMember(ctx.chat.id, newMember.id);
-          await send(ctx, 
-            `🚫 ${newMember.first_name} was banned for suspicious activity ` +
-            `(joined too many groups quickly).`
-          );
-          break;
-
-        case 'report':
-          await send(ctx, 
-            `⚠️ Suspicious activity detected: ${newMember.first_name} joined ` +
-            `multiple groups in a short time. Admins have been notified.`
-          );
-          break;
-      }
-
-      // Send report
-      if (multiJoinSettings.autoReport) {
-        const tracker = await MultiJoinTracker.findOne({
-          userId: newMember.id,
-          communityId
-        });
-
-        const settings = await this.getSettings(communityId);
-        const groupList = tracker?.joins.slice(-5).map(
-          j => `- ${j.groupName}`
-        ).join('\n') || '';
-
-        await this.sendReport(
-          communityId,
-          newMember.id,
-          newMember.first_name,
-          "Suspicious multi-group join",
-          ctx.chat.title,
-          `Joined ${tracker?.joins.length} groups:\n${groupList}`,
-          settings?.reportSettings.reportChannel
-        );
-      }
-    } catch (error) {
-      console.error("Error handling suspicious join:", error);
-    }
-  }
-
-  // ============================================
   // NEW USER RESTRICTIONS
   // ============================================
 
@@ -2220,6 +2019,5 @@ export default {
   AutoModSettings,
   UserWarning,
   MessageTracker,
-  MultiJoinTracker,
   AutoDeleteQueue
 };

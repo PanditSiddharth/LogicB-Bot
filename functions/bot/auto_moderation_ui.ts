@@ -4,11 +4,10 @@
 // ============================================
 
 import { Context, Telegraf } from 'telegraf';
-import { AutoModSettings, Group, MultiJoinTracker } from '../../mongo';
+import { AutoModSettings } from '../../mongo';
 import { AutoModUIComponents } from './automod_ui_components';
 import { BotHelpers } from '../utils/helpers';
 import { MessageManager } from '../utils/messageManager';
-import { ChatMember, Update } from 'telegraf/types';
 const send = BotHelpers.send;
 export class AutoModUI {
   private static readonly TOGGLE_COMMANDS = [
@@ -51,7 +50,7 @@ export class AutoModUI {
   private static readonly ACTION_OPTIONS = {
     spam: ['warn', 'mute', 'kick', 'ban'],
     flood: ['warn', 'mute', 'kick', 'ban'],
-    multijoin: ['warn', 'kick', 'ban', 'report'],
+    multijoin: ['warn', 'kick', 'ban', 'mute', 'report'],
     warnings: ['mute', 'kick', 'ban']
   };
 

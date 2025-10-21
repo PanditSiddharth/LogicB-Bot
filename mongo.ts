@@ -192,7 +192,7 @@ const autoModSettingsSchema = new Schema<IAutoModSettings>({
     timeWindow: { type: Number, default: defaultSettings.multiJoinDetection.timeWindow },
     action: {
       type: String,
-      enum: ['warn', 'kick', 'ban', 'report'],
+      enum: ['warn', 'kick', 'mute', 'ban', 'report'],
       default: defaultSettings.multiJoinDetection.action
     },
     autoReport: { type: Boolean, default: defaultSettings.multiJoinDetection.autoReport }
@@ -266,7 +266,7 @@ const multiJoinTrackerSchema = new Schema({
   }],
   isReported: { type: Boolean, default: false },
   isSuspicious: { type: Boolean, default: false }
-}, { timestamps: true });
+}, { timestamps: true, versionKey: false });
 
 const autoDeleteQueueSchema = new Schema({
   communityId: { type: String, required: true, index: true },

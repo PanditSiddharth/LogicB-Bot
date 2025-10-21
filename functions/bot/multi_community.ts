@@ -5,6 +5,8 @@
 
 import { Context, Telegraf } from "telegraf";
 import {  Community, Group, GlobalBan, UserCommunity } from "../../mongo"
+import { BotHelpers } from "../utils/helpers";
+import { ChatMemberAdministrator } from "telegraf/types";
 // ============================================
 // COMMUNITY MANAGEMENT CLASS
 // ============================================
@@ -288,14 +290,29 @@ export class CommunityManager {
 
   setupGroupCommands() {
     // Add current group to community
-    this.bot.command("addgroup", async (ctx: any) => {
+    this.bot.command("addgroup", async (ctx: Context<any>) => {
       try {
         // Check if command is used in a group
         if (ctx.chat.type !== "group" && ctx.chat.type !== "supergroup") {
           return ctx.reply("❌ This command can only be used in groups!");
         }
 
-        const community = await this.getActiveCommunity(ctx.from.id);
+        const member = await ctx.getChatMember(ctx?.from?.id!);
+
+         if (member.status !== "administrator" && member.status !== "creator") 
+          return BotHelpers.send(ctx, "You must be an admin to add this group to a community.", 
+        {type: "warnings"}
+          );
+          if(member.status === "administrator") {
+            if(!member.can_manage_chat || !member.can_delete_messages ||
+              !member.can_restrict_members
+            ) 
+           return BotHelpers.send(ctx, "You must be admin with delete, ban users and manage group permission to add this group to a community.",
+            {type: "warnings"}
+            )
+          }
+
+        const community = await this.getActiveCommunity(ctx?.from?.id!);
         if (!community) {
           return ctx.reply(
             "❌ No active community!\n\n" +
@@ -305,7 +322,7 @@ export class CommunityManager {
         }
 
         // Check permissions
-        if (!await this.hasPermission(ctx.from.id, community, "canAddGroups")) {
+        if (!await this.hasPermission(ctx.message.from.id, community, "canAddGroups")) {
           return ctx.reply("❌ You don't have permission to add groups!");
         }
 
@@ -324,7 +341,7 @@ export class CommunityManager {
           communityId: community.communityId,
           username: ctx.chat.username || "",
           groupName: ctx.chat.title,
-          addedBy: ctx.from.id
+          addedBy: ctx.message.from.id
         });
 
         // Update community stats
