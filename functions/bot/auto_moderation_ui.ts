@@ -4,7 +4,7 @@
 // ============================================
 
 import { Telegraf } from 'telegraf';
-import { AutoModSettings } from '../../mongo';
+import { AutoModSettings, Group, MultiJoinTracker } from '../../mongo';
 import { AutoModUIComponents } from './automod_ui_components';
 import { BotHelpers } from '../utils/helpers';
 import { MessageManager } from '../utils/messageManager';
@@ -23,7 +23,7 @@ export class AutoModUI {
 
   private static readonly MENU_BUTTONS = [
     'automod_words',
-    'automod_spam', 
+    'automod_spam',
     'automod_flood',
     'automod_media',
     'automod_multijoin',
@@ -37,7 +37,7 @@ export class AutoModUI {
   private static readonly FIELD_MAP: Record<string, string> = {
     'words': 'bannedWords',
     'antispam': 'antiSpam',
-    'antiflood': 'antiFlood', 
+    'antiflood': 'antiFlood',
     'media': 'mediaRestrictions',
     'multijoin': 'multiJoinDetection',
     'warnings': 'warningSystem',
@@ -56,7 +56,7 @@ export class AutoModUI {
 
   private static readonly MEDIA_FIELD_MAP: Record<string, string> = {
     'photos': 'blockPhotos',
-    'videos': 'blockVideos', 
+    'videos': 'blockVideos',
     'stickers': 'blockStickers',
     'gifs': 'blockGifs',
     'docs': 'blockDocuments',
@@ -72,7 +72,173 @@ export class AutoModUI {
     this.initializeQuickToggles(bot);
     this.initializeActionCallbacks(bot);
     this.initializeCommandHandlers(bot);
+    this.initializeMultiJoinDetection(bot);
     console.log("✅ Auto-Mod UI Loaded!");
+  }
+
+
+
+  private static initializeMultiJoinDetection(bot: any) {
+    // Listen for new members joining
+    bot.on('new_chat_members', async (ctx: any) => {
+      try {
+        const newMembers = ctx.message.new_chat_members;
+
+        for (const member of newMembers) {
+          // Skip bots
+          if (member.is_bot) continue;
+
+          await this.handleUserJoin(ctx, member);
+        }
+      } catch (error) {
+        console.error('Error in new_chat_members handler:', error);
+      }
+    });
+  }
+
+  private static async handleUserJoin(ctx: any, user: any) {
+    try {
+      // Get community for this chat
+      const group = await Group.findOne({ chatId: ctx.chat.id, isActive: true });
+      if (!group) return;
+
+      const settings = await AutoModSettings.findOne({
+        communityId: group.communityId
+      });
+
+      // Check if multi-join detection is enabled
+      if (!settings?.multiJoinDetection?.enabled) return;
+
+      // Find or create tracker for this user
+      let tracker = await MultiJoinTracker.findOne({
+        userId: user.id,
+        communityId: group.communityId
+      });
+
+      if (!tracker) {
+        tracker = await MultiJoinTracker.create({
+          userId: user.id,
+          communityId: group.communityId,
+          joins: [],
+          isReported: false,
+          isSuspicious: false
+        });
+      }
+
+      // Add this join to the tracker
+      tracker.joins.push({
+        groupId: ctx.chat.id,
+        groupName: ctx.chat.title || 'Unknown',
+        timestamp: new Date()
+      });
+
+      // Clean old joins outside the time window
+      const timeWindow = settings.multiJoinDetection.timeWindow || 3600;
+      const cutoffTime = new Date(Date.now() - (timeWindow * 1000));
+
+      tracker?.joins?.forEach((join: any) => {
+        if (join.timestamp <= cutoffTime) {
+          tracker.joins.pull(join);
+        }
+      });
+
+
+      await tracker.save();
+
+      // Check if threshold exceeded
+      const maxGroups = settings.multiJoinDetection.maxGroupsInTime || 5;
+
+      if (tracker.joins.length >= maxGroups && !tracker.isReported) {
+        tracker.isSuspicious = true;
+        tracker.isReported = true;
+        await tracker.save();
+
+        // Take action
+        await this.handleMultiJoinViolation(
+          ctx,
+          user,
+          tracker,
+          settings,
+          group.communityId
+        );
+      }
+    } catch (error) {
+      console.error('Error handling user join:', error);
+    }
+  }
+
+  private static async handleMultiJoinViolation(
+    ctx: any,
+    user: any,
+    tracker: any,
+    settings: any,
+    communityId: string
+  ) {
+    const action = settings.multiJoinDetection.action || 'report';
+    const groupsList = tracker.joins
+      .map((j: any) => `• ${j.groupName}`)
+      .join('\n');
+
+    // Report to channel
+    if (settings.multiJoinDetection.autoReport && settings.reportSettings?.reportChannel) {
+      const reportMsg = `
+🚨 *Multi-Join Detection Alert*
+
+*User:* ${user.first_name} (${user.id})
+*Username:* ${user.username ? '@' + user.username : 'None'}
+
+*Joined ${tracker.joins.length} groups in ${BotHelpers.formatDuration(settings.multiJoinDetection.timeWindow)}:*
+${groupsList}
+
+*Action Taken:* ${action.toUpperCase()}
+*Time:* ${new Date().toLocaleString()}
+      `;
+
+      try {
+        await ctx.telegram.sendMessage(
+          settings.reportSettings.reportChannel,
+          reportMsg,
+          { parse_mode: 'Markdown' }
+        );
+      } catch (error) {
+        console.error('Error sending multi-join report:', error);
+      }
+    }
+
+    // Take action based on settings
+    try {
+      switch (action) {
+        case 'warn':
+          await ctx.reply(
+            `⚠️ Warning: ${user.first_name} joined multiple groups rapidly.`,
+            { parse_mode: 'Markdown' }
+          );
+          break;
+
+        case 'kick':
+          await ctx.kickChatMember(user.id);
+          await ctx.unbanChatMember(user.id); // Unban so they can rejoin
+          await ctx.reply(
+            `🚫 ${user.first_name} was kicked for joining multiple groups rapidly.`,
+            { parse_mode: 'Markdown' }
+          );
+          break;
+
+        case 'ban':
+          await ctx.kickChatMember(user.id);
+          await ctx.reply(
+            `🔨 ${user.first_name} was banned for joining multiple groups rapidly.`,
+            { parse_mode: 'Markdown' }
+          );
+          break;
+
+        case 'report':
+          // Just report, no action in chat
+          break;
+      }
+    } catch (error) {
+      console.error('Error executing multi-join action:', error);
+    }
   }
 
   // ============================================
@@ -93,7 +259,7 @@ export class AutoModUI {
 
         const settings = await this.getOrCreateSettings(community.communityId);
         const component = await AutoModUIComponents.getComponent(settings, 'back_automod');
-        
+
         await MessageManager.updateUI(ctx, 'automod_dashboard', component);
       } catch (error) {
         await BotHelpers.handleError(ctx, error);
@@ -109,7 +275,7 @@ export class AutoModUI {
       bot.action(button, async (ctx: any) => {
         try {
           await ctx.answerCbQuery();
-          
+
           const community = await BotHelpers.getActiveCommunity(ctx.from.id);
           if (!community) {
             return ctx.answerCbQuery("❌ No active community", true);
@@ -132,7 +298,7 @@ export class AutoModUI {
     bot.action(/^toggle_(\w+)$/, async (ctx: any) => {
       try {
         const typee = ctx.match[1];
-        
+
         const community = await BotHelpers.getActiveCommunity(ctx.from.id);
         if (!community) {
           return ctx.answerCbQuery("❌ No active community", true);
@@ -172,7 +338,7 @@ export class AutoModUI {
     bot.action(/^tm_(\w+)$/, async (ctx: any) => {
       try {
         const mediaType = ctx.match[1];
-        
+
         const community = await BotHelpers.getActiveCommunity(ctx.from.id);
         if (!community) {
           return ctx.answerCbQuery("❌ No active community", true);
@@ -231,7 +397,7 @@ export class AutoModUI {
 
           const status = settings[field].enabled ? 'enabled ✅' : 'disabled ❌';
           const featureName = field.replace(/([A-Z])/g, ' $1').toLowerCase();
-          
+
           await ctx.reply(`✅ ${this.capitalizeFirst(featureName)} ${status}`);
         } catch (error) {
           await BotHelpers.handleError(ctx, error);
@@ -248,7 +414,7 @@ export class AutoModUI {
     bot.action(/^set_action_(\w+)_(\w+)$/, async (ctx: any) => {
       try {
         const [feature, action] = [ctx.match[1], ctx.match[2]];
-        
+
         const community = await BotHelpers.getActiveCommunity(ctx.from.id);
         if (!community) {
           return ctx.answerCbQuery("❌ No active community", true);
@@ -256,7 +422,7 @@ export class AutoModUI {
 
         const settings = await this.getOrCreateSettings(community.communityId);
         const field = this.FIELD_MAP[feature];
-        
+
         if (!settings[field]) {
           return ctx.answerCbQuery("❌ Invalid feature", true);
         }
@@ -270,7 +436,7 @@ export class AutoModUI {
           settings[field].action = action;
           await ctx.answerCbQuery(`✅ Action set to: ${action.toUpperCase()}`);
         }
-        
+
         await settings.save();
         await AutoModUIComponents.updateUI(ctx, settings, `automod_${feature}`);
       } catch (error) {
@@ -282,7 +448,7 @@ export class AutoModUI {
     bot.action(/^set_duration_(\w+)_(\d+)$/, async (ctx: any) => {
       try {
         const [feature, duration] = [ctx.match[1], parseInt(ctx.match[2])];
-        
+
         const community = await BotHelpers.getActiveCommunity(ctx.from.id);
         if (!community) {
           return ctx.answerCbQuery("❌ No active community", true);
@@ -300,7 +466,7 @@ export class AutoModUI {
         } else if (feature === 'newusers') {
           settings[field].restrictDuration = duration;
         }
-        
+
         await settings.save();
 
         await ctx.answerCbQuery(`✅ Duration set to: ${BotHelpers.formatDuration(duration)}`);
@@ -336,7 +502,7 @@ export class AutoModUI {
         await settings.save();
 
         await ctx.reply(`✅ Anti-spam message limit set to: ${limit}`);
-        
+
         // Update UI
         await AutoModUIComponents.updateUI(ctx, settings, 'automod_spam');
       } catch (error) {
@@ -366,7 +532,7 @@ export class AutoModUI {
         await settings.save();
 
         await ctx.reply(`✅ Anti-spam time window set to: ${BotHelpers.formatDuration(duration)}`);
-        
+
         // Update UI
         await AutoModUIComponents.updateUI(ctx, settings, 'automod_spam');
       } catch (error) {
@@ -392,7 +558,7 @@ export class AutoModUI {
         await settings.save();
 
         await ctx.reply(`✅ Anti-flood repeat limit set to: ${limit}`);
-        
+
         // Update UI
         await AutoModUIComponents.updateUI(ctx, settings, 'automod_flood');
       } catch (error) {
@@ -418,7 +584,7 @@ export class AutoModUI {
         await settings.save();
 
         await ctx.reply(`✅ Maximum warnings set to: ${max}`);
-        
+
         // Update UI
         await AutoModUIComponents.updateUI(ctx, settings, 'automod_warnings');
       } catch (error) {
@@ -448,7 +614,7 @@ export class AutoModUI {
         await settings.save();
 
         await ctx.reply(`✅ Warning expiry set to: ${BotHelpers.formatDuration(duration)}`);
-        
+
         // Update UI
         await AutoModUIComponents.updateUI(ctx, settings, 'automod_warnings');
       } catch (error) {
@@ -471,7 +637,7 @@ export class AutoModUI {
 
         // Validate range (1 minute to 48 hours)
         const minutesValue = duration / 60;
-        if (minutesValue < 1 || minutesValue > 48*60) {
+        if (minutesValue < 1 || minutesValue > 48 * 60) {
           return ctx.reply("❌ Duration must be between 1 minutes and 48 hours");
         }
 
@@ -485,7 +651,7 @@ export class AutoModUI {
         await settings.save();
 
         await ctx.reply(`✅ Auto-delete time set to: ${BotHelpers.formatDuration(duration)}`);
-        
+
         // Update UI
         await AutoModUIComponents.updateUI(ctx, settings, 'automod_autodelete');
       } catch (error) {
@@ -510,7 +676,7 @@ export class AutoModUI {
         await settings.save();
 
         await ctx.reply(`✅ Admin exclusion ${value === 'yes' ? 'enabled' : 'disabled'}`);
-        
+
         // Update UI
         await AutoModUIComponents.updateUI(ctx, settings, 'automod_autodelete');
       } catch (error) {
@@ -564,7 +730,7 @@ export class AutoModUI {
         await settings.save();
 
         await ctx.reply(`✅ Multi-join time window set to: ${BotHelpers.formatDuration(duration)}`);
-        
+
         // Update UI
         await AutoModUIComponents.updateUI(ctx, settings, 'automod_multijoin');
       } catch (error) {
@@ -595,7 +761,7 @@ export class AutoModUI {
         await settings.save();
 
         await ctx.reply(`✅ New user restriction duration set to: ${BotHelpers.formatDuration(duration)}`);
-        
+
         // Update UI
         await AutoModUIComponents.updateUI(ctx, settings, 'automod_newusers');
       } catch (error) {
@@ -620,7 +786,7 @@ export class AutoModUI {
         await settings.save();
 
         await ctx.reply(`✅ New users can ${value === 'yes' ? 'now' : 'no longer'} send messages`);
-        
+
         // Update UI
         await AutoModUIComponents.updateUI(ctx, settings, 'automod_newusers');
       } catch (error) {
@@ -647,7 +813,7 @@ export class AutoModUI {
         await settings.save();
 
         await ctx.reply(`✅ New users can ${value === 'yes' ? 'now' : 'no longer'} send media`);
-        
+
         // Update UI
         await AutoModUIComponents.updateUI(ctx, settings, 'automod_newusers');
       } catch (error) {
@@ -673,7 +839,7 @@ export class AutoModUI {
         await settings.save();
 
         await ctx.reply(`✅ Warnings before punishment set to: ${warnings}`);
-        
+
         // Update UI
         await AutoModUIComponents.updateUI(ctx, settings, 'automod_words');
       } catch (error) {
@@ -687,11 +853,11 @@ export class AutoModUI {
   // ============================================
   private static async getOrCreateSettings(communityId: string) {
     let settings = await AutoModSettings.findOne({ communityId });
-    
+
     if (!settings) {
       settings = await AutoModSettings.create({ communityId });
     }
-    
+
     return settings;
   }
 

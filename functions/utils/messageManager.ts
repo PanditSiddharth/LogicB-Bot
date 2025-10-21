@@ -77,7 +77,7 @@ export class MessageManager {
             undefined,
             message,
             { ...options, parse_mode: 'Markdown' }
-          );
+          ).catch((err: any) => {});
           if (edited) return edited;
         } catch (error) {
           console.log('Could not edit message, will send new:', error.message);
