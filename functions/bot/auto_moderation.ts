@@ -7,11 +7,12 @@
 import { Context, Telegraf } from "telegraf";
 import mongoose from "mongoose";
 import { AutoDeleteQueue, AutoModSettings, Community, Group, MessageTracker, MultiJoinTracker, UserCommunity, UserWarning } from "../../mongo"
+import { BotHelpers } from "../utils/helpers";
 
 // ============================================
 // AUTO-MODERATION CLASS
 // ============================================
-
+const send = BotHelpers.send;
 export class AutoModerationSystem {
   private bot: Telegraf;
   private spamCache = new Map<string, any>();
@@ -62,10 +63,10 @@ export class AutoModerationSystem {
     this.bot.command("automod", async (ctx: any) => {
       try {
         const community = await this.getActiveCommunity(ctx.from.id);
-        if (!community) return ctx.reply("❌ No active community.");
+        if (!community) return send(ctx, "❌ No active community.");
 
         if (!await this.isOwnerOrAdmin(ctx.from.id, community)) {
-          return ctx.reply("❌ Only admins can access auto-moderation settings?.");
+          return send(ctx, "❌ Only admins can access auto-moderation settings?.");
         }
 
         const settings = await this.getSettings(community.communityId);
@@ -113,12 +114,12 @@ ${settings?.reportSettings?.enabled ? '✅' : '❌'} Report System
           ]
         };
 
-        await ctx.reply(message, {
-          parse_mode: "Html",
+        await send(ctx, message, {
+          parse_mode: "HTML",
           reply_markup: keyboard
         });
       } catch (error: any) {
-        await ctx.reply(`❌ Error: ${error.message}`);
+        await send(ctx, `❌ Error: ${error.message}`);
       }
     });
 
@@ -149,18 +150,18 @@ Example: \`/wordaction ban\`
 Example: \`/wordwarnings 3\`
       `;
 
-      await ctx.reply(help, { parse_mode: "Markdown" });
+      await send(ctx, help, { parse_mode: "Markdown" });
     });
 
     // Add banned words
     this.bot.command("addword", async (ctx: any) => {
       try {
         const community = await this.getActiveCommunity(ctx.from.id);
-        if (!community) return ctx.reply("❌ No active community.");
+        if (!community) return send(ctx, "❌ No active community.");
 
         const args = ctx.message.text.split(" ").slice(1);
         if (args.length === 0) {
-          return ctx.reply("❌ Usage: /addword <word1> <word2> ...");
+          return send(ctx, "❌ Usage: /addword <word1> <word2> ...");
         }
 
         const settings = await this.getSettings(community.communityId);
@@ -179,12 +180,12 @@ Example: \`/wordwarnings 3\`
         settings.bannedWords.words = existing;
         await settings?.save();
 
-        await ctx.reply(
+        await send(ctx, 
           `✅ Added ${added.length} banned words:\n${added.join(', ')}\n\n` +
           `Total banned words: ${existing.length}`
         );
       } catch (error: any) {
-        await ctx.reply(`❌ Error: ${error.message}`);
+        await send(ctx, `❌ Error: ${error.message}`);
       }
     });
 
@@ -192,11 +193,11 @@ Example: \`/wordwarnings 3\`
     this.bot.command("removeword", async (ctx: any) => {
       try {
         const community = await this.getActiveCommunity(ctx.from.id);
-        if (!community) return ctx.reply("❌ No active community.");
+        if (!community) return send(ctx, "❌ No active community.");
 
         const args = ctx.message.text.split(" ").slice(1);
         if (args.length === 0) {
-          return ctx.reply("❌ Usage: /removeword <word>");
+          return send(ctx, "❌ Usage: /removeword <word>");
         }
 
         const word = args[0].toLowerCase();
@@ -204,15 +205,15 @@ Example: \`/wordwarnings 3\`
         
         const index = settings?.bannedWords.words.indexOf(word);
         if (index === -1) {
-          return ctx.reply("❌ Word not found in banned list.");
+          return send(ctx, "❌ Word not found in banned list.");
         }
 
         settings?.bannedWords.words.splice(index, 1);
         await settings?.save();
 
-        await ctx.reply(`✅ Removed "${word}" from banned words list.`);
+        await send(ctx, `✅ Removed "${word}" from banned words list.`);
       } catch (error: any) {
-        await ctx.reply(`❌ Error: ${error.message}`);
+        await send(ctx, `❌ Error: ${error.message}`);
       }
     });
 
@@ -220,13 +221,13 @@ Example: \`/wordwarnings 3\`
     this.bot.command("listwords", async (ctx: any) => {
       try {
         const community = await this.getActiveCommunity(ctx.from.id);
-        if (!community) return ctx.reply("❌ No active community.");
+        if (!community) return send(ctx, "❌ No active community.");
 
         const settings = await this.getSettings(community.communityId);
         const words = settings?.bannedWords.words;
 
         if (words.length === 0) {
-          return ctx.reply("📋 No banned words configured.");
+          return send(ctx, "📋 No banned words configured.");
         }
 
         const message = `
@@ -238,9 +239,9 @@ ${words.map((w, i) => `${i + 1}. ${w}`).join('\n')}
 *Status:* ${settings?.bannedWords.enabled ? 'Enabled ✅' : 'Disabled ❌'}
         `;
 
-        await ctx.reply(message, { parse_mode: "Markdown" });
+        await send(ctx, message, { parse_mode: "Markdown" });
       } catch (error: any) {
-        await ctx.reply(`❌ Error: ${error.message}`);
+        await send(ctx, `❌ Error: ${error.message}`);
       }
     });
 
@@ -248,17 +249,17 @@ ${words.map((w, i) => `${i + 1}. ${w}`).join('\n')}
     this.bot.command("togglewords", async (ctx: any) => {
       try {
         const community = await this.getActiveCommunity(ctx.from.id);
-        if (!community) return ctx.reply("❌ No active community.");
+        if (!community) return send(ctx, "❌ No active community.");
 
         const settings = await this.getSettings(community.communityId);
         settings.bannedWords.enabled = !settings?.bannedWords.enabled;
         await settings?.save();
 
-        await ctx.reply(
+        await send(ctx, 
           `✅ Banned words filter is now ${settings?.bannedWords.enabled ? 'ENABLED ✅' : 'DISABLED ❌'}`
         );
       } catch (error: any) {
-        await ctx.reply(`❌ Error: ${error.message}`);
+        await send(ctx, `❌ Error: ${error.message}`);
       }
     });
 
@@ -266,27 +267,27 @@ ${words.map((w, i) => `${i + 1}. ${w}`).join('\n')}
     this.bot.command("wordaction", async (ctx: any) => {
       try {
         const community = await this.getActiveCommunity(ctx.from.id);
-        if (!community) return ctx.reply("❌ No active community.");
+        if (!community) return send(ctx, "❌ No active community.");
 
         const args = ctx.message.text.split(" ");
         if (args.length < 2) {
-          return ctx.reply("❌ Usage: /wordaction <delete/warn/mute/kick/ban>");
+          return send(ctx, "❌ Usage: /wordaction <delete/warn/mute/kick/ban>");
         }
 
         const action = args[1].toLowerCase();
         const validActions = ['delete', 'warn', 'mute', 'kick', 'ban'];
         
         if (!validActions.includes(action)) {
-          return ctx.reply("❌ Invalid action! Use: delete, warn, mute, kick, or ban");
+          return send(ctx, "❌ Invalid action! Use: delete, warn, mute, kick, or ban");
         }
 
         const settings = await this.getSettings(community.communityId);
         settings.bannedWords.action = action as any;
         await settings?.save();
 
-        await ctx.reply(`✅ Banned words action set to: ${action.toUpperCase()}`);
+        await send(ctx, `✅ Banned words action set to: ${action.toUpperCase()}`);
       } catch (error: any) {
-        await ctx.reply(`❌ Error: ${error.message}`);
+        await send(ctx, `❌ Error: ${error.message}`);
       }
     });
 
@@ -294,7 +295,7 @@ ${words.map((w, i) => `${i + 1}. ${w}`).join('\n')}
     this.bot.command("antispam", async (ctx: any) => {
       try {
         const community = await this.getActiveCommunity(ctx.from.id);
-        if (!community) return ctx.reply("❌ No active community.");
+        if (!community) return send(ctx, "❌ No active community.");
 
         const settings = await this.getSettings(community.communityId);
 
@@ -316,9 +317,9 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
 \`/antispam_duration <seconds>\` - Set mute duration
         `;
 
-        await ctx.reply(message, { parse_mode: "Markdown" });
+        await send(ctx, message, { parse_mode: "Markdown" });
       } catch (error: any) {
-        await ctx.reply(`❌ Error: ${error.message}`);
+        await send(ctx, `❌ Error: ${error.message}`);
       }
     });
 
@@ -326,17 +327,17 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
     this.bot.command("antispam_toggle", async (ctx: any) => {
       try {
         const community = await this.getActiveCommunity(ctx.from.id);
-        if (!community) return ctx.reply("❌ No active community.");
+        if (!community) return send(ctx, "❌ No active community.");
 
         const settings = await this.getSettings(community.communityId);
         settings.antiSpam.enabled = !settings?.antiSpam.enabled;
         await settings?.save();
 
-        await ctx.reply(
+        await send(ctx, 
           `✅ Anti-spam is now ${settings?.antiSpam?.enabled ? 'ENABLED ✅' : 'DISABLED ❌'}`
         );
       } catch (error: any) {
-        await ctx.reply(`❌ Error: ${error.message}`);
+        await send(ctx, `❌ Error: ${error.message}`);
       }
     });
 
@@ -345,7 +346,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
     this.bot.command("delmessages", async (ctx: any) => {
       try {
         const community = await this.getActiveCommunity(ctx.from.id);
-        if (!community) return ctx.reply("❌ No active community.");
+        if (!community) return send(ctx, "❌ No active community.");
 
         let userId: number;
         let userName: string;
@@ -370,7 +371,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
           userId = ctx.message.reply_to_message.from.id;
           userName = ctx.message.reply_to_message.from.first_name;
         } else {
-          return ctx.reply(
+          return send(ctx, 
             "❌ Usage:\n\n" +
             "**Method 1:** Reply to user's message\n" +
             "`/delmessages 48`\n\n" +
@@ -392,7 +393,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
         }
 
         if (isNaN(hours) || hours < 1 || hours > 48) {
-          return ctx.reply(
+          return send(ctx, 
             "❌ Hours must be between 1 and 48\n\n" +
             "⚠️ **Telegram Limitation:** Bot can only delete messages up to 48 hours old.\n" +
             "For older messages, use `/scandelete`",
@@ -400,7 +401,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
           );
         }
 
-        const statusMsg = await ctx.reply(
+        const statusMsg = await send(ctx, 
           `🗑️ Deleting ${userName}'s messages from last ${hours} hours...\n` +
           `⏳ Please wait, this may take a few minutes...`
         );
@@ -474,9 +475,9 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
         
         resultMsg += `\n\n⏱️ Time range: Last ${hours} hours`;
 
-        await ctx.reply(resultMsg, { parse_mode: "Markdown" });
+        await send(ctx, resultMsg, { parse_mode: "Markdown" });
       } catch (error: any) {
-        await ctx.reply(`❌ Error: ${error.message}`);
+        await send(ctx, `❌ Error: ${error.message}`);
       }
     });
 
@@ -485,7 +486,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
     this.bot.command("scandelete", async (ctx: any) => {
       try {
         const community = await this.getActiveCommunity(ctx.from.id);
-        if (!community) return ctx.reply("❌ No active community.");
+        if (!community) return send(ctx, "❌ No active community.");
 
         let userId: number;
         let userName: string;
@@ -509,7 +510,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
           userId = ctx.message.reply_to_message.from.id;
           userName = ctx.message.reply_to_message.from.first_name;
         } else {
-          return ctx.reply(
+          return send(ctx, 
             "❌ Usage:\n\n" +
             "**Method 1:** Reply to user's message\n" +
             "`/scandelete`\n\n" +
@@ -519,7 +520,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
           );
         }
 
-        const statusMsg = await ctx.reply(
+        const statusMsg = await send(ctx, 
           `🔍 Scanning for ${userName}'s messages across all groups...\n` +
           `This will check tracked messages in the database.`
         );
@@ -572,7 +573,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
 
         // Generate report
         if (foundMessages.length === 0) {
-          return ctx.reply(
+          return send(ctx, 
             `✅ No tracked messages found from ${userName} (${userId}).\n\n` +
             `Either:\n` +
             `• Messages are already deleted\n` +
@@ -605,10 +606,10 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
         report += `• \`/forcedelete ${userId}\` - Scan & delete all\n`;
         report += `• \`/cgban ${userId} reason\` - Ban from all groups`;
 
-        await ctx.reply(report, { parse_mode: "Markdown" });
+        await send(ctx, report, { parse_mode: "Markdown" });
 
       } catch (error: any) {
-        await ctx.reply(`❌ Error: ${error.message}`);
+        await send(ctx, `❌ Error: ${error.message}`);
       }
     });
 
@@ -617,10 +618,10 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
     this.bot.command("forcedelete", async (ctx: any) => {
       try {
         const community = await this.getActiveCommunity(ctx.from.id);
-        if (!community) return ctx.reply("❌ No active community.");
+        if (!community) return send(ctx, "❌ No active community.");
 
         if (!await this.isOwnerOrAdmin(ctx.from.id, community)) {
-          return ctx.reply("❌ Only community admins can use this command!");
+          return send(ctx, "❌ Only community admins can use this command!");
         }
 
         let userId: number;
@@ -643,7 +644,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
           userId = ctx.message.reply_to_message.from.id;
           userName = ctx.message.reply_to_message.from.first_name;
         } else {
-          return ctx.reply(
+          return send(ctx, 
             "❌ Usage:\n\n" +
             "**Method 1:** Reply to user's message\n" +
             "`/forcedelete`\n\n" +
@@ -667,7 +668,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
           ]
         };
 
-        await ctx.reply(
+        await send(ctx, 
           `⚠️ **Force Delete Confirmation**\n\n` +
           `👤 User: ${userName} (${userId})\n\n` +
           `This will:\n` +
@@ -680,7 +681,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
         );
 
       } catch (error: any) {
-        await ctx.reply(`❌ Error: ${error.message}`);
+        await send(ctx, `❌ Error: ${error.message}`);
       }
     });
 
@@ -703,7 +704,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
 
         let totalDeleted = 0;
         let totalScanned = 0;
-        const statusMsg = await ctx.reply("🔄 Starting deletion process...");
+        const statusMsg = await send(ctx, "🔄 Starting deletion process...");
 
         // Use tracked messages for faster deletion
         for (const group of groups) {
@@ -748,7 +749,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
           await new Promise(resolve => setTimeout(resolve, 300));
         }
 
-        await ctx.reply(
+        await send(ctx, 
           `✅ **Force Delete Complete**\n\n` +
           `📁 Scanned: ${totalScanned} groups\n` +
           `🗑️ Deleted: ${totalDeleted} messages\n\n` +
@@ -757,7 +758,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
         );
 
       } catch (error: any) {
-        await ctx.reply(`❌ Error: ${error.message}`);
+        await send(ctx, `❌ Error: ${error.message}`);
       }
     });
 
@@ -771,7 +772,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
         const hours = args[1] ? parseInt(args[1]) : 48;
 
         if (isNaN(hours) || hours < 1 || hours > 48) {
-          return ctx.reply(
+          return send(ctx, 
             "❌ Hours must be between 1 and 48\n\n" +
             "⚠️ *Telegram Limitation:* Bot can only delete messages up to 48 hours old.\n" +
             "For older messages, you need to delete manually or use /scandelete",
@@ -779,7 +780,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
           );
         }
 
-        const statusMsg = await ctx.reply(
+        const statusMsg = await send(ctx, 
           `🗑️ Deleting ${userName}'s messages from last ${hours} hours...\n` +
           `⏳ Please wait, this may take a few minutes...`
         );
@@ -853,9 +854,9 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
         
         resultMsg += `\n\n⏱️ Time range: Last ${hours} hours`;
 
-        await ctx.reply(resultMsg, { parse_mode: "Markdown" });
+        await send(ctx, resultMsg, { parse_mode: "Markdown" });
       } catch (error: any) {
-        await ctx.reply(`❌ Error: ${error.message}`);
+        await send(ctx, `❌ Error: ${error.message}`);
       }
     }
 */
@@ -863,16 +864,16 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
     this.bot.command("scandelete", async (ctx: any) => {
       try {
         const community = await this.getActiveCommunity(ctx.from.id);
-        if (!community) return ctx.reply("❌ No active community.");
+        if (!community) return send(ctx, "❌ No active community.");
 
         if (!ctx.message.reply_to_message) {
-          return ctx.reply("❌ Reply to user's message to scan their messages.");
+          return send(ctx, "❌ Reply to user's message to scan their messages.");
         }
 
         const userId = ctx.message.reply_to_message.from.id;
         const userName = ctx.message.reply_to_message.from.first_name;
 
-        const statusMsg = await ctx.reply(
+        const statusMsg = await send(ctx, 
           `🔍 Scanning for ${userName}'s messages across all groups...\n` +
           `This will check last 1000 messages in each group.`
         );
@@ -928,7 +929,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
 
         // Generate report
         if (foundMessages.length === 0) {
-          return ctx.reply(
+          return send(ctx, 
             `✅ No messages found from ${userName} in recent scans.\n` +
             `Either messages are already deleted or very old.`
           );
@@ -956,10 +957,10 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
         report += `3. Delete manually\n`;
         report += `4. Or use /forceban to ban user from all groups`;
 
-        await ctx.reply(report, { parse_mode: "Markdown" });
+        await send(ctx, report, { parse_mode: "Markdown" });
 
       } catch (error: any) {
-        await ctx.reply(`❌ Error: ${error.message}`);
+        await send(ctx, `❌ Error: ${error.message}`);
       }
     });
 
@@ -967,14 +968,14 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
     this.bot.command("forcedelete", async (ctx: any) => {
       try {
         const community = await this.getActiveCommunity(ctx.from.id);
-        if (!community) return ctx.reply("❌ No active community.");
+        if (!community) return send(ctx, "❌ No active community.");
 
         if (!await this.isOwnerOrAdmin(ctx.from.id, community)) {
-          return ctx.reply("❌ Only community admins can use this command!");
+          return send(ctx, "❌ Only community admins can use this command!");
         }
 
         if (!ctx.message.reply_to_message) {
-          return ctx.reply(
+          return send(ctx, 
             "❌ Reply to user's message to force delete.\n\n" +
             "⚠️ *Warning:* This will:\n" +
             "1. Scan last 100 messages in each group\n" +
@@ -997,7 +998,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
           ]
         };
 
-        await ctx.reply(
+        await send(ctx, 
           `⚠️ *Force Delete Confirmation*\n\n` +
           `User: ${userName} (${userId})\n\n` +
           `This will:\n` +
@@ -1010,7 +1011,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
         );
 
       } catch (error: any) {
-        await ctx.reply(`❌ Error: ${error.message}`);
+        await send(ctx, `❌ Error: ${error.message}`);
       }
     });
 
@@ -1033,7 +1034,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
 
         let totalDeleted = 0;
         let totalScanned = 0;
-        const statusMsg = await ctx.reply("🔄 Starting deletion process...");
+        const statusMsg = await send(ctx, "🔄 Starting deletion process...");
 
         // Use tracked messages for faster deletion
         for (const group of groups) {
@@ -1078,7 +1079,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
           await new Promise(resolve => setTimeout(resolve, 300));
         }
 
-        await ctx.reply(
+        await send(ctx, 
           `✅ *Force Delete Complete*\n\n` +
           `📁 Scanned: ${totalScanned} groups\n` +
           `🗑️ Deleted: ${totalDeleted} messages\n\n` +
@@ -1087,7 +1088,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
         );
 
       } catch (error: any) {
-        await ctx.reply(`❌ Error: ${error.message}`);
+        await send(ctx, `❌ Error: ${error.message}`);
       }
     });
 
@@ -1100,10 +1101,10 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
     this.bot.command("warn", async (ctx: any) => {
       try {
         const community = await this.getActiveCommunity(ctx.from.id);
-        if (!community) return ctx.reply("❌ No active community.");
+        if (!community) return send(ctx, "❌ No active community.");
 
         if (!ctx.message.reply_to_message) {
-          return ctx.reply("❌ Reply to user's message to warn them.");
+          return send(ctx, "❌ Reply to user's message to warn them.");
         }
 
         const userId = ctx.message.reply_to_message.from.id;
@@ -1129,7 +1130,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
         const settings = await this.getSettings(community.communityId);
         const maxWarnings = settings?.warningSystem.maxWarnings;
 
-        await ctx.reply(
+        await send(ctx, 
           `⚠️ *Warning Issued*\n\n` +
           `👤 User: ${userName}\n` +
           `📝 Reason: ${reason}\n` +
@@ -1148,7 +1149,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
           );
         }
       } catch (error: any) {
-        await ctx.reply(`❌ Error: ${error.message}`);
+        await send(ctx, `❌ Error: ${error.message}`);
       }
     });
 
@@ -1156,7 +1157,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
     this.bot.command("warnings", async (ctx: any) => {
       try {
         const community = await this.getActiveCommunity(ctx.from.id);
-        if (!community) return ctx.reply("❌ No active community.");
+        if (!community) return send(ctx, "❌ No active community.");
 
         let userId: number;
         let userName: string;
@@ -1173,10 +1174,10 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
           communityId: community.communityId,
           userId: userId
         });
-        if (!community) return ctx.reply("❌ No active community.");
+        if (!community) return send(ctx, "❌ No active community.");
 
         if (!userWarnings || userWarnings.totalWarnings === 0) {
-          return ctx.reply(`✅ ${userName} has no warnings.`);
+          return send(ctx, `✅ ${userName} has no warnings.`);
         }
 
         const settings = await this.getSettings(community.communityId);
@@ -1189,9 +1190,9 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
           message += `   📅 ${w.timestamp.toLocaleDateString()}\n`;
         });
 
-        await ctx.reply(message, { parse_mode: "Markdown" });
+        await send(ctx, message, { parse_mode: "Markdown" });
       } catch (error: any) {
-        await ctx.reply(`❌ Error: ${error.message}`);
+        await send(ctx, `❌ Error: ${error.message}`);
       }
     });
 
@@ -1199,14 +1200,14 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
     this.bot.command("clearwarnings", async (ctx: any) => {
       try {
         const community = await this.getActiveCommunity(ctx.from.id);
-        if (!community) return ctx.reply("❌ No active community.");
+        if (!community) return send(ctx, "❌ No active community.");
 
         if (!await this.isOwnerOrAdmin(ctx.from.id, community)) {
-          return ctx.reply("❌ Only admins can clear warnings.");
+          return send(ctx, "❌ Only admins can clear warnings.");
         }
 
         if (!ctx.message.reply_to_message) {
-          return ctx.reply("❌ Reply to user's message to clear their warnings.");
+          return send(ctx, "❌ Reply to user's message to clear their warnings.");
         }
 
         const userId = ctx.message.reply_to_message.from.id;
@@ -1217,9 +1218,9 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
           userId: userId
         });
 
-        await ctx.reply(`✅ Cleared all warnings for ${userName}`);
+        await send(ctx, `✅ Cleared all warnings for ${userName}`);
       } catch (error: any) {
-        await ctx.reply(`❌ Error: ${error.message}`);
+        await send(ctx, `❌ Error: ${error.message}`);
       }
     });
 
@@ -1227,7 +1228,7 @@ Mute Duration: ${settings?.antiSpam.muteDuration / 60} minutes
     this.bot.command("mediarestrict", async (ctx: any) => {
       try {
         const community = await this.getActiveCommunity(ctx.from.id);
-        if (!community) return ctx.reply("❌ No active community.");
+        if (!community) return send(ctx, "❌ No active community.");
 
         const settings = await this.getSettings(community.communityId);
 
@@ -1253,9 +1254,9 @@ ${settings?.mediaRestrictions.blockLinks ? '✅' : '❌'} Links
 Types: photos, videos, stickers, gifs, documents, links
         `;
 
-        await ctx.reply(message, { parse_mode: "Markdown" });
+        await send(ctx, message, { parse_mode: "Markdown" });
       } catch (error: any) {
-        await ctx.reply(`❌ Error: ${error.message}`);
+        await send(ctx, `❌ Error: ${error.message}`);
       }
     });
   }
@@ -1421,7 +1422,7 @@ Types: photos, videos, stickers, gifs, documents, links
           
           const community = await Community.findOne({ communityId: group.communityId });
           if (community?.settings?.welcomeMessage) {
-            await ctx.reply(
+            await send(ctx, 
               community.settings?.welcomeMessage
                 .replace('{name}', newMember.first_name)
                 .replace('{group}', ctx.chat.title)
@@ -1591,7 +1592,7 @@ Types: photos, videos, stickers, gifs, documents, links
           
           const userWarnings = await UserWarning.findOne({ communityId, userId });
           
-          await ctx.reply(
+          await send(ctx, 
             `⚠️ ${userName}, that word is not allowed!\n` +
             `Warnings: ${userWarnings?.totalWarnings || 1}/${settings?.bannedWords.warningsBeforePunish}`,
             { reply_to_message_id: ctx.message.message_id }
@@ -1606,17 +1607,17 @@ Types: photos, videos, stickers, gifs, documents, links
 
         case 'mute':
           await this.executeAction(ctx, userId, 'mute', communityId);
-          await ctx.reply(`🔇 ${userName} has been muted for using banned words.`);
+          await send(ctx, `🔇 ${userName} has been muted for using banned words.`);
           break;
 
         case 'kick':
           await this.executeAction(ctx, userId, 'kick', communityId);
-          await ctx.reply(`👢 ${userName} has been kicked for using banned words.`);
+          await send(ctx, `👢 ${userName} has been kicked for using banned words.`);
           break;
 
         case 'ban':
           await this.executeAction(ctx, userId, 'ban', communityId);
-          await ctx.reply(`🚫 ${userName} has been banned for using banned words.`);
+          await send(ctx, `🚫 ${userName} has been banned for using banned words.`);
           break;
       }
 
@@ -1723,7 +1724,7 @@ Types: photos, videos, stickers, gifs, documents, links
       const action = spamSettings.action;
       await this.executeAction(ctx, userId, action, communityId, spamSettings.muteDuration);
 
-      await ctx.reply(
+      await send(ctx, 
         `⚠️ ${userName} has been detected for spamming and ${action}ed!`
       );
 
@@ -1775,7 +1776,7 @@ Types: photos, videos, stickers, gifs, documents, links
       const action = floodSettings.action;
       await this.executeAction(ctx, ctx.from.id, action, communityId);
       
-      await ctx.reply(
+      await send(ctx, 
         `⚠️ ${ctx.from.first_name}, stop repeating the same message!`
       ).then((msg: any) => {
         setTimeout(() => ctx.deleteMessage(msg.message_id).catch(() => {}), 5000);
@@ -1804,7 +1805,7 @@ Types: photos, videos, stickers, gifs, documents, links
   private async handleRestrictedMedia(ctx: any, communityId: string) {
     try {
       await ctx.deleteMessage();
-      await ctx.reply(
+      await send(ctx, 
         `⚠️ ${ctx.from.first_name}, that type of media is not allowed in this group!`
       ).then((msg: any) => {
         setTimeout(() => ctx.deleteMessage(msg.message_id).catch(() => {}), 5000);
@@ -1886,7 +1887,7 @@ Types: photos, videos, stickers, gifs, documents, links
 
       switch (action) {
         case 'warn':
-          await ctx.reply(
+          await send(ctx, 
             `⚠️ ${newMember.first_name}, you've joined too many groups quickly. ` +
             `This looks suspicious!`
           );
@@ -1895,7 +1896,7 @@ Types: photos, videos, stickers, gifs, documents, links
         case 'kick':
           await this.bot.telegram.kickChatMember(ctx.chat.id, newMember.id);
           await this.bot.telegram.unbanChatMember(ctx.chat.id, newMember.id);
-          await ctx.reply(
+          await send(ctx, 
             `👢 ${newMember.first_name} was kicked for suspicious activity ` +
             `(joined too many groups quickly).`
           );
@@ -1903,14 +1904,14 @@ Types: photos, videos, stickers, gifs, documents, links
 
         case 'ban':
           await this.bot.telegram.banChatMember(ctx.chat.id, newMember.id);
-          await ctx.reply(
+          await send(ctx, 
             `🚫 ${newMember.first_name} was banned for suspicious activity ` +
             `(joined too many groups quickly).`
           );
           break;
 
         case 'report':
-          await ctx.reply(
+          await send(ctx, 
             `⚠️ Suspicious activity detected: ${newMember.first_name} joined ` +
             `multiple groups in a short time. Admins have been notified.`
           );

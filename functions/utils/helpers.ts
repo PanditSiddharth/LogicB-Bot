@@ -5,6 +5,7 @@
 
 import { Community, UserCommunity } from "../../mongo";
 import { BotMessageSettings, BotMessageQueue, MessageType } from "../../models/messageManager";
+import { Context, Telegraf } from "telegraf";
 
 export class BotHelpers {
   // Get active community for user
@@ -36,7 +37,7 @@ export class BotHelpers {
   }
 
   // Check if user is group admin
-  static async isGroupAdmin(bot: any, chatId: number, userId: number): Promise<boolean> {
+  static async isGroupAdmin(bot: Telegraf, chatId: number, userId: number): Promise<boolean> {
     try {
       const member = await bot.telegram.getChatMember(chatId, userId);
       return member.status === "creator" || member.status === "administrator";
@@ -46,10 +47,11 @@ export class BotHelpers {
   }
 
   // Identify user from context
-  static async identifyUser(ctx: any) {
+  static async identifyUser(ctx: Context<any>) {
     try {
       // Check for text mention
       if (ctx.message.entities?.[1]?.type === "text_mention") {
+        
         return {
           userId: ctx.message.entities[1].user.id,
           name: ctx.message.entities[1].user.first_name
@@ -129,7 +131,7 @@ export class BotHelpers {
   }
 
   // Error handler
-  static handleError(ctx: any, error: any, customMessage?: string): Promise<any> {
+  static handleError(ctx: Context<any>, error: any, customMessage?: string): Promise<any> {
     console.error('Bot Error:', error);
     const message = customMessage || `❌ Error: ${error.message || 'Unknown error'}`;
     return ctx.reply(message).catch(() => {});
@@ -202,7 +204,7 @@ export class BotHelpers {
 
   // Send message with auto-delete functionality
   static async send(
-    ctx: any, 
+    ctx: Context<any>, 
     text: string, 
     options: {
       type?: MessageType,
@@ -217,8 +219,9 @@ export class BotHelpers {
     } = {}
   ) {
     try {
+
       // Get community and settings
-      const community = await BotHelpers.getActiveCommunity(ctx.from?.id);
+      const community = await BotHelpers.getActiveCommunity(ctx?.from?.id!);
       if (!community) return ctx.reply(text, options); // Fallback to normal reply if no community
 
       // Get message deletion settings

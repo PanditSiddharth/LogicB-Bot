@@ -13,6 +13,9 @@ import { AutoModerationSystem } from "./functions/bot/auto_moderation";
 import { AutoModUI } from "./functions/bot/auto_moderation_ui";
 import { MessageCleanupService } from "./functions/services/messageCleanup";
 import { MessageManagerUI } from './functions/bot/message_manager_ui';
+import { initializeLocalModeration } from "./functions/bot/local_moderation";
+import { MultiJoinTracker } from "./mongo";
+import { MultiJoinDetection } from "./functions/bot/multi_join";
 
 // Load environment variables
 dotenv.config();
@@ -65,7 +68,8 @@ mongoose.connect(process.env.MONGODB_URI)
 
       // In your bot initialization
       MessageManagerUI.initialize(bot);
-
+      initializeLocalModeration(bot)
+      MultiJoinDetection.initializeMultiJoinDetection(bot)
       console.log("🎉 All modules loaded successfully");
     } catch (error) {
       console.error("❌ Error initializing modules:", error);
@@ -125,7 +129,26 @@ process.once('SIGTERM', () => {
 });
 
 // Launch bot
-bot.launch()
+bot.launch({
+  dropPendingUpdates: true,
+  allowedUpdates: [
+    'message',
+    'edited_message',
+    'channel_post',
+    'edited_channel_post',
+    'inline_query',
+    'chosen_inline_result',
+    'callback_query',
+    'shipping_query',
+    'pre_checkout_query',
+    'poll',
+    'poll_answer',
+    'my_chat_member',
+    'chat_member',
+    'chat_join_request'
+
+  ]
+})
   .then(() => {
     console.log('🤖 Bot started successfully!');
     console.log(`📅 ${new Date().toLocaleString()}`);
